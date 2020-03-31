@@ -12,8 +12,9 @@ let clock;
 
 const canvas = document.getElementById("canvas");
 
-const target = [0,1,1]
-let targetObject = null;
+const targets = [
+  {bone: 2, pos: [0,1,1], object: null}
+];
 
 let bones = [];
 const root = {
@@ -58,20 +59,25 @@ const root = {
   ]
 }
 
-function convertBonesToLinks(bones, effector_index){
+function convertBoneToLinkIndex(links, boneIndex){
+  for(const [index, link] of links.entries()) {
+    if(link.boneIndex === boneIndex){
+      return index;
+    }
+  }
+  return -1;
+}
+
+function convertBonesToLinks(bones){
   const links = [];
   const indices = [];
-  let eff_link_index = -1;
   bones.forEach((bone,i)=>{
-    if(i == effector_index){
-      eff_link_index = links.length; 
-    }
-    links.push({ boneIndex: i, axis: 0, angle: bone.rotation[0], offset: bone.offset, angle_range: [0, 90], parent: indices[bone.parentIndex] || -1 });
-    links.push({ boneIndex: i, axis: 1, angle: bone.rotation[1], offset: [0,0,0], angle_range: [0, 90], parent: links.length - 1 });
-    links.push({ boneIndex: i, axis: 2, angle: bone.rotation[2], offset: [0,0,0], angle_range: [0, 90], parent: links.length - 1 });
+    links.push({ boneIndex: i, axis: 0, angle: bone.rotation[0], offset: bone.offset, angle_range: [0, 180], parentIndex: indices[bone.parentIndex] || -1 });
+    links.push({ boneIndex: i, axis: 1, angle: bone.rotation[1], offset: [0,0,0], angle_range: [0, 180], parentIndex: links.length - 1 });
+    links.push({ boneIndex: i, axis: 2, angle: bone.rotation[2], offset: [0,0,0], angle_range: [0, 180], parentIndex: links.length - 1 });
     indices[i] = links.length - 1;
   });
-  return [links, eff_link_index];
+  return links;
 }
 
 function convertLinksToBones(links, bones){
@@ -86,12 +92,11 @@ function draw_imgui(time) {
   ImGui.Begin("My Window");
   ImGui.Dummy(new ImGui.ImVec2(400,0));
   
-  const [links, eff_index] = convertBonesToLinks(bones, 2);
-
+  // 全ジョイント表示
   bones.forEach((link,i)=>{
     ImGui.PushID(i);
-    ImGui.SliderFloat3("pos"+i, link.offset, -10, 10);
-    ImGui.SliderAngle3("rot"+i, link.rotation);
+    ImGui.SliderFloat3(`pos[${i}]`, link.offset, -10, 10);
+    ImGui.SliderAngle3(`rot[${i}]`, link.rotation);
     if(link.object){
       link.object.position.set(link.offset[0], link.offset[1], link.offset[2]);
       link.object.rotation.set(link.rotation[0], link.rotation[1], link.rotation[2]);
@@ -99,13 +104,19 @@ function draw_imgui(time) {
     ImGui.PopID();
   })
 
+  ImGui.Separator();
+
+  // ik計算
   {
-    if(ImGui.SliderFloat3("target", target, -2, 2)){
-      if(targetObject){
-        targetObject.position.set(target[0], target[1], target[2]);
+    // ik計算しやすい形に変換
+    const links = convertBonesToLinks(bones);
+
+    targets.forEach((target,i) => {
+      if(ImGui.SliderFloat3(`target[${i}]`, target.pos, -2, 2) && target.object){
+        target.object.position.set(target.pos[0], target.pos[1], target.pos[2]);
       }
-    }
-    const result = ik.solve_jacobian_ik(links, target, eff_index);
+    })
+    const result = ik.solve_jacobian_ik(links, targets[0].pos, targets.map(e=> convertBoneToLinkIndex(links, e.bone))[0], 1);
     // console.log(result);
     convertLinksToBones(links, bones);
   }
@@ -153,13 +164,13 @@ function init_three() {
   controls.update();
 
   // ターゲット
-  {
+  targets.forEach(target => {
     const geometry = new THREE.SphereGeometry(0.1);
     const material = new THREE.MeshStandardMaterial({color: 0xFFFFFF});
-    targetObject = new THREE.Mesh(geometry, material);
-    targetObject.position.set(target[0], target[1], target[2]);
-    scene.add(targetObject);
-  }
+    target.object = new THREE.Mesh(geometry, material);
+    target.object.position.set(target.pos[0], target.pos[1], target.pos[2]);
+    scene.add(target.object);
+  })
 
   // -----------------------------------------
   // 組み立て

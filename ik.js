@@ -7,7 +7,7 @@ const DEG_TO_RAD = Math.PI / 180.0;
 
 export const range = num => math.range(0,num).toArray();
 
-const zip = (arr1, arr2) => arr1.map((k, i) => [k, arr2[i]]);
+export const zip = (arr1, arr2) => arr1.map((k, i) => [k, arr2[i]]);
 
 function inv(mat){
   return math.matrix(ml.inverse(new ml.Matrix(mat.toArray()), true).data.map(e=>[].slice.call(e)));
@@ -145,7 +145,7 @@ export function getEffectorMatrix(links, i) {
 
     tmp = mul(translate(...link.offset), rot(link.angle), tmp);
 
-    i = link.parent;
+    i = link.parentIndex;
   }
   return tmp
 }
@@ -181,11 +181,11 @@ export function computeJacobian(links, angles, effector_index) {
   effectors.forEach((effector, index) => {
 
     // エフェクタに対する 先端からルートまでの各ジョイント に関する偏微分を求める
-    for(let i = effector; i != -1; i = links[i].parent){
+    for(let i = effector; i != -1; i = links[i].parentIndex){
       let tmp = math.identity(4);
   
       // ジョイントiに関する偏微分を求める
-      for (let j = effector; j != -1; j = links[j].parent) {
+      for (let j = effector; j != -1; j = links[j].parentIndex) {
         const link = links[j];
         const angle = angles[j];
 
@@ -218,7 +218,7 @@ export function computeJacobian2(links, angles, effector_index) {
 
   // エフェクタに対する 先端からルートまでの各ジョイント に関する偏微分を求める
   // => 現在のリンクから先端までのベクトルの回転を考える。（速度ヤコビアン）
-  for(let i = effector_index; i != -1; i = links[i].parent){
+  for(let i = effector_index; i != -1; i = links[i].parentIndex){
     const link = links[i];
     const currentPos = getEffectorPosition(links, i)
     const diff = math.subtract(effectorPos, currentPos)
@@ -338,9 +338,9 @@ export function solve_jacobian_ik(links, target, effector_index = -1, max_iterat
 
 // console.log(
 //   solve_jacobian_ik([
-//     { axis: 0, angle: 0, offset: [0, 1, 0], angle_range: [0, 180], child: [1], parent: -1 },
-//     { axis: 2, angle: 0, offset: [0, 1, 0], angle_range: [0, 180], child: [2], parent: 0 },
-//     { axis: 0, angle: 0, offset: [0, 1, 0], angle_range: [0, 180], child: [], parent: 1 }],
+//     { axis: 0, angle: 0, offset: [0, 1, 0], angle_range: [0, 180], child: [1], parentIndex: -1 },
+//     { axis: 2, angle: 0, offset: [0, 1, 0], angle_range: [0, 180], child: [2], parentIndex: 0 },
+//     { axis: 0, angle: 0, offset: [0, 1, 0], angle_range: [0, 180], child: [], parentIndex: 1 }],
 //     [1, 2, 0]));
 
 
