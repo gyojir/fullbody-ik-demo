@@ -13,7 +13,8 @@ let clock;
 const canvas = document.getElementById("canvas");
 
 const targets = [
-  {bone: 2, pos: [0,1,1], object: null}
+  {bone: 2, pos: [-1,1,1], object: null},
+  {bone: 4, pos: [1,1,1], object: null}
 ];
 
 let bones = [];
@@ -102,9 +103,8 @@ function draw_imgui(time) {
       link.object.rotation.set(link.rotation[0], link.rotation[1], link.rotation[2]);
     }
     ImGui.PopID();
+    ImGui.Separator();
   })
-
-  ImGui.Separator();
 
   // ik計算
   {
@@ -116,7 +116,7 @@ function draw_imgui(time) {
         target.object.position.set(target.pos[0], target.pos[1], target.pos[2]);
       }
     })
-    const result = ik.solve_jacobian_ik(links, targets[0].pos, targets.map(e=> convertBoneToLinkIndex(links, e.bone))[0], 1);
+    const result = ik.solve_jacobian_ik(links, targets.map(e=>e.pos), targets.map(e=> convertBoneToLinkIndex(links, e.bone)), 1);
     // console.log(result);
     convertLinksToBones(links, bones);
   }
