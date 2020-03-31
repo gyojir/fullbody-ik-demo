@@ -12,7 +12,7 @@ let clock;
 
 const canvas = document.getElementById("canvas");
 
-const target = [1,1,1]
+const target = [0,1,1]
 let targetObject = null;
 
 let bones = [];
@@ -21,7 +21,7 @@ const root = {
   rotation: [0,0,0],
   children: [{
       offset: [0.5,1,0],
-      rotation: [1,0,0],
+      rotation: [0,0,0],
       children: [{
         offset: [0,1,0],
         rotation: [0,0,0],
@@ -31,26 +31,53 @@ const root = {
     {
       offset: [-0.5,1,0],
       rotation: [0,0,0],
-      children: []
+      children: [{
+        offset: [0,1,0],
+        rotation: [0,0,0],
+        children: []
+      }]
     },
     {
       offset: [0.5,0,0],
       rotation: [Math.PI,0,0],
-      children: []
+      children: [{
+        offset: [0,1,0],
+        rotation: [0,0,0],
+        children: []
+      }]
     },
     {
       offset: [-0.5,0,0],
       rotation: [Math.PI,0,0],
-      children: []
-    }]
+      children: [{
+        offset: [0,1,0],
+        rotation: [0,0,0],
+        children: []
+      }]
+    }
+  ]
 }
 
-function convertBonesToLinks(bones){
+function convertBonesToLinks(bones, effector_index){
   const links = [];
+  const indices = [];
+  let eff_link_index = -1;
   bones.forEach((bone,i)=>{
-    links.push(...ik.range(3).map(axis=>({ boneIndex: i, axis: axis, angle: bone.rotation[axis], offset: axis == 0 ? bone.offset : [0,0,0], angle_range: [0, 180] })));
+    if(i == effector_index){
+      eff_link_index = links.length; 
+    }
+    links.push({ boneIndex: i, axis: 0, angle: bone.rotation[0], offset: bone.offset, angle_range: [0, 90], parent: indices[bone.parentIndex] || -1 });
+    links.push({ boneIndex: i, axis: 1, angle: bone.rotation[1], offset: [0,0,0], angle_range: [0, 90], parent: links.length - 1 });
+    links.push({ boneIndex: i, axis: 2, angle: bone.rotation[2], offset: [0,0,0], angle_range: [0, 90], parent: links.length - 1 });
+    indices[i] = links.length - 1;
   });
-  return links;
+  return [links, eff_link_index];
+}
+
+function convertLinksToBones(links, bones){
+  links.forEach((link,i)=>{
+    bones[link.boneIndex].rotation[link.axis] = link.angle;
+  });
 }
 
 function draw_imgui(time) {   
@@ -58,6 +85,8 @@ function draw_imgui(time) {
   ImGui.NewFrame();
   ImGui.Begin("My Window");
   ImGui.Dummy(new ImGui.ImVec2(400,0));
+  
+  const [links, eff_index] = convertBonesToLinks(bones, 2);
 
   bones.forEach((link,i)=>{
     ImGui.PushID(i);
@@ -70,12 +99,15 @@ function draw_imgui(time) {
     ImGui.PopID();
   })
 
-  if(ImGui.SliderFloat3("target", target, -10, 10)){
-    if(targetObject){
-      targetObject.position.set(target[0], target[1], target[2]);
+  {
+    if(ImGui.SliderFloat3("target", target, -2, 2)){
+      if(targetObject){
+        targetObject.position.set(target[0], target[1], target[2]);
+      }
     }
-    const links = convertBonesToLinks(bones);
-    ik.solve_jacobian_ik(links, target);
+    const result = ik.solve_jacobian_ik(links, target, eff_index);
+    // console.log(result);
+    convertLinksToBones(links, bones);
   }
 
   ImGui.End();
@@ -133,8 +165,9 @@ function init_three() {
   // 組み立て
   // -----------------------------------------
   const build = (link, parent)=>{
-    const geometry = new THREE.CylinderGeometry( 0, 0.1, 1);
-    geometry.vertices.forEach(e=>e.y+=0.5);
+    const height = link.children.length > 0 ? 1 : 0.1;
+    const geometry = new THREE.CylinderGeometry( 0, 0.1, height);
+    geometry.vertices.forEach(e=>e.y+=height/2);
     const material = new THREE.MeshStandardMaterial({color: 0xFFC107});
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(link.offset[0], link.offset[1], link.offset[2]);
