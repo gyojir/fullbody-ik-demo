@@ -69,6 +69,7 @@ function convertBoneToLinkIndex(links, boneIndex){
   return -1;
 }
 
+// 回転を分解する
 function convertBonesToLinks(bones){
   const links = [];
   const indices = [];
@@ -83,6 +84,9 @@ function convertBonesToLinks(bones){
 
 function convertLinksToBones(links, bones){
   links.forEach((link,i)=>{
+    if(link.axis === 0){
+      bones[link.boneIndex].offset = link.offset;
+    }
     bones[link.boneIndex].rotation[link.axis] = link.angle;
   });
 }

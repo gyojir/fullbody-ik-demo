@@ -202,7 +202,13 @@ export function computeJacobian(links, angles, effector_indices) {
     }
   });
 
-  return math.matrix(jac);
+  // 稼働ルートヤコビアン
+  const sliderJointJac = 
+    range(effector_indices.length)
+    .map(()=>math.identity(3))
+    .reduce((prev,curr)=>math.concat(prev,curr));
+
+  return math.concat(sliderJointJac, math.matrix(jac), 0);
 }
 
 // ヤコビアン計算。外積バージョン
@@ -261,19 +267,24 @@ export function computeRedundantCoefficients(eta, jac, jacPI) {
   return math.subtract(eta, mul(eta, jac, jacPI));
 }
 
-export function updateAngles(links, _angles, diffs, effector_indices) {
+export function calcNewAnglesAndPositions(links, _angles, diffs, effector_indices) {
   let angles = math.clone(_angles);
+  let rootpos = math.clone(links[0].offset);
 
   // 加重行列を単位行列で初期化
-  const weight = math.identity(links.length)
+  const weight = math.identity(links.length + 3)
   // ヤコビアンの計算
-  const jac = computeJacobian2(links, angles, effector_indices)
+  const jac = computeJacobian(links, angles, effector_indices)
   // ヤコビアンの擬似逆行列
   const jacPI = computePseudoInverse(jac)
   // ヤコビアンの加重擬似逆行列
   const jacWPI = computeWeightedPseudoInverse(jac, weight)
   // 目標エフェクタ変位×加重擬似逆行列
-  angles = math.add(angles, mul(math.flatten(diffs), jacWPI).toArray());
+  const p = mul(math.flatten(diffs), jacWPI).toArray();
+  const p_angle = p.slice(3);
+  const p_rootpos = p.slice(0, 3);
+  angles = math.add(angles, p_angle);
+  rootpos = math.add(rootpos, p_rootpos);
   // 冗長変数etaには可動範囲を超えた場合に元に戻すような角変位を与えればいい
   // ↑参考 http://sssiii.seesaa.net/article/383711810.html
   let eta = math.zeros(links.length).toArray() // ゼロクリア
@@ -284,15 +295,16 @@ export function updateAngles(links, _angles, diffs, effector_indices) {
       eta[i] = (link.angle_range[0] * DEG_TO_RAD) - angles[i];
     }
   });
-  eta = mul(eta, 1); // 適当に調整
+  // 稼働ルート分くっつける
+  eta = math.concat(math.zeros(3), eta);
   // 冗長項の計算   
-  const rc = computeRedundantCoefficients(eta, jac, jacPI)
+  const rc = computeRedundantCoefficients(eta, jac, jacPI).toArray()
+  const rc_angle = rc.slice(3);
   // 冗長項を関節角度ベクトルに加える
-  angles = math.add(angles,math.squeeze(rc).toArray());
-
+  angles = math.add(angles, rc_angle);
   angles = angles.map(e=>e%(Math.PI*2));
 
-  return angles;
+  return [angles, rootpos];
 }
 
 export function solve_jacobian_ik(links, targets, effector_indices, max_iteration = 1, step = 0.05) {
@@ -328,7 +340,9 @@ export function solve_jacobian_ik(links, targets, effector_indices, max_iteratio
     diffs = math.multiply(diffs, step / dist_mean);
 
     // 目標エフェクタ変位にしたがって関節角度ベクトルを更新
-    angles = updateAngles(links, angles, diffs, effector_indices)
+    const [new_angle, new_rootpos] = calcNewAnglesAndPositions(links, angles, diffs, effector_indices)
+    angles = new_angle;
+    links[0].offset = new_rootpos;
     set_angles(links, angles)
   }
 
