@@ -4,6 +4,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 // import Stats from 'three/examples/jsm/libs/stats.module.js';
 import * as ImGui_Impl from "imgui-js/dist/imgui_impl.umd";
 import * as ik from './ik';
+import { ConstrainType, JointType } from './ik';
+import { range, zip } from "./util";
 
 const ImGui = ImGui_Impl.ImGui;
 
@@ -13,14 +15,15 @@ let clock;
 const canvas = document.getElementById("canvas");
 
 const targets = [
-  {bone: 2, pos: [-1,1,1], object: null},
-  {bone: 4, pos: [1,1,1], object: null}
+  {bone: 2, pos: [1,1,0], object: null, type: ConstrainType.Position},
+  {bone: 4, pos: [-1,1,0], object: null, type: ConstrainType.Position}
 ];
 
 let bones = [];
 const root = {
   offset: [0,0,0],
   rotation: [0,0,0],
+  slide: true, // ik計算用スライドジョイントフラグ
   children: [{
       offset: [0.5,1,0],
       rotation: [0,0,0],
@@ -60,34 +63,41 @@ const root = {
   ]
 }
 
-function convertBoneToLinkIndex(links, boneIndex){
-  for(const [index, link] of links.entries()) {
-    if(link.boneIndex === boneIndex){
+function convertBoneToJointIndex(joints, boneIndex){
+  for(const [index, joint] of joints.entries()) {
+    if(joint.boneIndex === boneIndex){
       return index;
     }
   }
   return -1;
 }
 
-// 回転を分解する
-function convertBonesToLinks(bones){
-  const links = [];
+// 回転と移動を分解する
+function convertBonesToJoints(bones){
+  const joints = [];
   const indices = [];
   bones.forEach((bone,i)=>{
-    links.push({ boneIndex: i, axis: 0, angle: bone.rotation[0], offset: bone.offset, angle_range: [0, 180], parentIndex: indices[bone.parentIndex] || -1 });
-    links.push({ boneIndex: i, axis: 1, angle: bone.rotation[1], offset: [0,0,0], angle_range: [0, 180], parentIndex: links.length - 1 });
-    links.push({ boneIndex: i, axis: 2, angle: bone.rotation[2], offset: [0,0,0], angle_range: [0, 180], parentIndex: links.length - 1 });
-    indices[i] = links.length - 1;
+    // value = 関節変位 q
+    if(bone.slide){
+      joints.push({ boneIndex: i, type: JointType.Slide, axis: 0, value: bone.offset[0], offset: [0,0,0], parentIndex: indices[bone.parentIndex] || -1 });
+      joints.push({ boneIndex: i, type: JointType.Slide, axis: 1, value: bone.offset[1], offset: [0,0,0], parentIndex: joints.length - 1 });
+      joints.push({ boneIndex: i, type: JointType.Slide, axis: 2, value: bone.offset[2], offset: [0,0,0], parentIndex: joints.length - 1 });
+    }
+    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 0, value: bone.rotation[0], offset: bone.slide ? [0,0,0] : bone.offset, angle_range: [0, 180], parentIndex: bone.slide ? joints.length - 1 : indices[bone.parentIndex] || -1 });
+    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 1, value: bone.rotation[1], offset: [0,0,0], angle_range: [0, 180], parentIndex: joints.length - 1 });
+    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 2, value: bone.rotation[2], offset: [0,0,0], angle_range: [0, 180], parentIndex: joints.length - 1 });
+    indices[i] = joints.length - 1;
   });
-  return links;
+  return joints;
 }
 
-function convertLinksToBones(links, bones){
-  links.forEach((link,i)=>{
-    if(link.axis === 0){
-      bones[link.boneIndex].offset = link.offset;
+function convertJointsToBones(joints, bones){
+  joints.forEach((joint,i)=>{
+    if(joint.type === JointType.Slide){
+      bones[joint.boneIndex].offset[joint.axis] = joint.value;
+    }else{
+      bones[joint.boneIndex].rotation[joint.axis] = joint.value;
     }
-    bones[link.boneIndex].rotation[link.axis] = link.angle;
   });
 }
 
@@ -98,13 +108,13 @@ function draw_imgui(time) {
   ImGui.Dummy(new ImGui.ImVec2(400,0));
   
   // 全ジョイント表示
-  bones.forEach((link,i)=>{
+  bones.forEach((bone,i)=>{
     ImGui.PushID(i);
-    ImGui.SliderFloat3(`pos[${i}]`, link.offset, -10, 10);
-    ImGui.SliderAngle3(`rot[${i}]`, link.rotation);
-    if(link.object){
-      link.object.position.set(link.offset[0], link.offset[1], link.offset[2]);
-      link.object.rotation.set(link.rotation[0], link.rotation[1], link.rotation[2]);
+    ImGui.SliderFloat3(`pos[${i}]`, bone.offset, -10, 10);
+    ImGui.SliderAngle3(`rot[${i}]`, bone.rotation);
+    if(bone.object){
+      bone.object.position.set(...bone.offset);
+      bone.object.rotation.set(...bone.rotation);
     }
     ImGui.PopID();
     ImGui.Separator();
@@ -113,17 +123,21 @@ function draw_imgui(time) {
   // ik計算
   {
     // ik計算しやすい形に変換
-    const links = convertBonesToLinks(bones);
+    const joints = convertBonesToJoints(bones);
+    const targetIndices = targets.map(e=> convertBoneToJointIndex(joints, e.bone));
 
+    ik.solve_jacobian_ik(joints, targets.map(e=>e.pos), targetIndices, 1);
+    convertJointsToBones(joints, bones);
+    
     targets.forEach((target,i) => {
       if(ImGui.SliderFloat3(`target[${i}]`, target.pos, -2, 2) && target.object){
-        target.object.position.set(target.pos[0], target.pos[1], target.pos[2]);
+        target.object.position.set(...target.pos);
       }
+      const eff_pos = ik.getEffectorPosition(joints, targetIndices[i]).toArray();
+      ImGui.SliderFloat3(`effector_pos[${i}]`, eff_pos, -100, 100);
     })
-    const result = ik.solve_jacobian_ik(links, targets.map(e=>e.pos), targets.map(e=> convertBoneToLinkIndex(links, e.bone)), 1);
-    // console.log(result);
-    convertLinksToBones(links, bones);
   }
+
 
   ImGui.End();
   ImGui.EndFrame();
@@ -172,29 +186,29 @@ function init_three() {
     const geometry = new THREE.SphereGeometry(0.1);
     const material = new THREE.MeshStandardMaterial({color: 0xFFFFFF});
     target.object = new THREE.Mesh(geometry, material);
-    target.object.position.set(target.pos[0], target.pos[1], target.pos[2]);
+    target.object.position.set(...target.pos);
     scene.add(target.object);
   })
 
   // -----------------------------------------
   // 組み立て
   // -----------------------------------------
-  const build = (link, parent)=>{
-    const height = link.children.length > 0 ? 1 : 0.1;
+  const build = (bone, parent)=>{
+    const height = bone.children.length > 0 ? 1 : 0.1;
     const geometry = new THREE.CylinderGeometry( 0, 0.1, height);
     geometry.vertices.forEach(e=>e.y+=height/2);
     const material = new THREE.MeshStandardMaterial({color: 0xFFC107});
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(link.offset[0], link.offset[1], link.offset[2]);
-    mesh.rotation.set(link.rotation[0], link.rotation[1], link.rotation[2]);
+    mesh.position.set(...bone.offset);
+    mesh.rotation.set(...bone.rotation);
     parent.object.add(mesh);
 
-    link.object = mesh;
-    link.index = bones.length;
-    link.parentIndex = parent.index;
-    bones.push(link);
+    bone.object = mesh;
+    bone.index = bones.length;
+    bone.parentIndex = parent.index;
+    bones.push(bone);
 
-    link.children.forEach(e=> build(e, link));
+    bone.children.forEach(e=> build(e, bone));
   }
   const group = new THREE.Group();
   build(root, {object: group, index: -1});
