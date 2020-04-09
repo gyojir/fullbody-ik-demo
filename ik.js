@@ -276,13 +276,12 @@ export function computeJacobian(joints, values, constrains) {
       if(constrain.type === ConstrainType.Position){
           let tmp = math.identity(4);
 
-          // ジョイントiで偏微分する
+          // 座標変換をジョイントiで偏微分する
           for (let j = constrain.joint; j != -1; j = joints[j].parentIndex) {
-            const tmp_joint = joints[j];
-            
+            const tmp_joint = joints[j];            
             const value = values[j];
 
-            const mat = joint.type === JointType.Revolution ?
+            const mat = tmp_joint.type === JointType.Revolution ?
               // 回転ジョイント
               (i === j ? // i == j で偏微分
                 (angle)=>diffRotAxis(tmp_joint.axis,angle) :
@@ -314,7 +313,7 @@ export function computeJacobian(joints, values, constrains) {
       }      
     }
   });
-  
+
   return math.matrix(jac);
 }
 
