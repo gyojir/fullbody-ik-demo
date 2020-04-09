@@ -30,9 +30,15 @@ function getTranslate(mat){
 }
 
 function getRotationXYZ(mat){
+  // rotX(x) * rotY(y) * rotZ(z) =
+  //  |  CyCz        -CySz         Sy   |
+  //  |  SxSyCz+CxSz -SxSySz+CxCz -SxCy |
+  //  | -CxSyCz+SxSz  CxSySz+SxCz  CxCy |
+
   const m = mat.toArray();
-  
   const sq_m12_m22 = Math.sqrt(Math.pow(m[1][2],2) + Math.pow(m[2][2],2));
+  
+  // Cy==0のときはxを0として計算
   if(Math.abs(sq_m12_m22) < Number.EPSILON){
     return [
       0,

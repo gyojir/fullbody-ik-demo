@@ -3,8 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 // import Stats from 'three/examples/jsm/libs/stats.module.js';
 import * as ImGui_Impl from "imgui-js/dist/imgui_impl.umd";
-import * as ik from './ik';
-import { ConstrainType, JointType } from './ik';
+import { solve_jacobian_ik, getEffectorPosition, getEffectorOrientation, ConstrainType, JointType } from './ik';
 import { range, zip } from "./util";
 
 const ImGui = ImGui_Impl.ImGui;
@@ -15,9 +14,9 @@ let clock;
 const canvas = document.getElementById("canvas");
 
 const constrains = [
-  {bone: 2, pos: [1,1,0], object: null, type: ConstrainType.Position},
-  // {bone: 2, pos: [1,0,0], object: null, type: ConstrainType.Orientation},
-  {bone: 4, pos: [-1,1,0], object: null, type: ConstrainType.Position}
+  {bone: 2, joint: -1, pos: [1,1,0], object: null, type: ConstrainType.Position},
+  // {bone: 2, joint: -1, pos: [1,0,0], object: null, type: ConstrainType.Orientation},
+  {bone: 4, joint: -1, pos: [-1,1,0], object: null, type: ConstrainType.Position}
 ];
 
 let bones = [];
@@ -130,12 +129,12 @@ function draw_imgui(time) {
       joint: convertBoneToJointIndex(joints, e.bone)
     }));
 
-    ik.solve_jacobian_ik(joints, converted_constrains, 1);
+    solve_jacobian_ik(joints, converted_constrains, 1);
     convertJointsToBones(joints, bones);
     
     // デバッグ表示
     constrains.forEach((constrain,i) => {
-      const pos = ik.getEffectorPosition(joints, converted_constrains[i].joint).toArray();
+      const pos = getEffectorPosition(joints, converted_constrains[i].joint).toArray();
 
       if(converted_constrains[i].type === ConstrainType.Position){
         ImGui.SliderFloat3(`constrain[${i}]`, constrain.pos, -2, 2)
@@ -144,7 +143,7 @@ function draw_imgui(time) {
           constrain.object.position.set(...constrain.pos);
         }
       }else{
-        const rot = ik.getEffectorOrientation(joints, converted_constrains[i].joint);
+        const rot = getEffectorOrientation(joints, converted_constrains[i].joint);
         ImGui.SliderAngle3(`constrain[${i}]`, constrain.pos, -180, 180)
         ImGui.SliderAngle3(`effector_rot[${i}]`, rot, -180, 180);
         if(constrain.object){
