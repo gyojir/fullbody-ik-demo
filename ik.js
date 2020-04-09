@@ -87,6 +87,37 @@ function translateAxis(axis, len){
   return mat(len);
 }
 
+function diffTranslateX() {
+  return math.matrix([
+    [0.0, 0.0, 0.0, 1.0],
+    [0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0]]);
+}
+
+function diffTranslateY() {
+  return math.matrix([
+    [0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0],
+    [0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0]]);
+}
+
+function diffTranslateZ() {
+  return math.matrix([
+    [0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0],
+    [0.0, 0.0, 0.0, 0.0]]);
+}
+
+function diffTranslateAxis(axis){
+  let mat = axis == 0 ? diffTranslateX :
+            axis == 1 ? diffTranslateY :
+            axis == 2 ? diffTranslateZ : ()=>1;
+  return mat();
+}
+
 function rotX(r) {
   const c = math.cos(r)
   const s = math.sin(r)
@@ -124,7 +155,7 @@ function rotAxis(axis, angle){
   return mat(angle);
 }
 
-function diffX(r) {
+function diffRotX(r) {
   const c = math.cos(r)
   const s = math.sin(r)
   return math.matrix([
@@ -134,7 +165,7 @@ function diffX(r) {
     [0.0, 0.0, 0.0, 0.0]])
 }
 
-function diffY(r) {
+function diffRotY(r) {
   const c = math.cos(r)
   const s = math.sin(r)
   return math.matrix([
@@ -144,7 +175,7 @@ function diffY(r) {
     [0.0, 0.0, 0.0, 0.0]])
 }
 
-function diffZ(r) {
+function diffRotZ(r) {
   const c = math.cos(r)
   const s = math.sin(r)
   return math.matrix([
@@ -154,10 +185,10 @@ function diffZ(r) {
     [0.0, 0.0, 0.0, 0.0]])
 }
 
-function diffZAxis(axis, angle){
-  let mat = axis == 0 ? diffX :
-            axis == 1 ? diffY :
-            axis == 2 ? diffZ : ()=>1;
+function diffRotAxis(axis, angle){
+  let mat = axis == 0 ? diffRotX :
+            axis == 1 ? diffRotY :
+            axis == 2 ? diffRotZ : ()=>1;
   return mat(angle);
 }
 
@@ -230,66 +261,83 @@ export function setJointValues(joints, values) {
 }
 
 // ヤコビアン計算。偏微分バージョン
-export function computeJacobian(joints, angles, effector_indices) {
-  // ヤコビアンは（関節角度ベクトル長 × エフェクタ数*3次元位置ベクトル長）の行列
-  const jac = math.zeros(angles.length, effector_indices.length * 3).toArray();
+export function computeJacobian(joints, values, constrains) {
+  // ヤコビアンは（関節角度ベクトル長 × 拘束数*3次元）の行列
+  const jac = math.zeros(values.length, constrains.length * 3).toArray();
   
-  // 各エフェクタに対してヤコビアンを求める
-  effector_indices.forEach((effector, index) => {
+  // 各拘束に対してヤコビアンを求める
+  constrains.forEach((constrain, index) => {
 
-    // エフェクタに対する 先端からルートまでの各ジョイント に関する偏微分を求める
-    for(let i = effector; i != -1; i = joints[i].parentIndex){
-      let tmp = math.identity(4);
-  
-      // ジョイントiに関する偏微分を求める
-      for (let j = effector; j != -1; j = joints[j].parentIndex) {
-        const joint = joints[j];
-        const angle = angles[j];
+    // 拘束対象エフェクタに対する 先端からルートまでの各ジョイント に関する偏微分を求める
+    for(let i = constrain.joint; i != -1; i = joints[i].parentIndex){
+      const joint = joints[i];
 
-        // i == j で偏微分
-        const rot = i === j ?
-         (angle)=>diffZAxis(joint.axis,angle) :
-         (angle)=>rotAxis(joint.axis,angle);
-                  
-        tmp = mul(translate(...joint.offset), rot(angle), tmp);
+      // 位置拘束
+      if(constrain.type === ConstrainType.Position){
+          let tmp = math.identity(4);
+
+          // ジョイントiで偏微分する
+          for (let j = constrain.joint; j != -1; j = joints[j].parentIndex) {
+            const tmp_joint = joints[j];
+            
+            const value = values[j];
+
+            const mat = joint.type === JointType.Revolution ?
+              // 回転ジョイント
+              (i === j ? // i == j で偏微分
+                (angle)=>diffRotAxis(tmp_joint.axis,angle) :
+                (angle)=>rotAxis(tmp_joint.axis,angle)) :
+              // スライダジョイント
+              (i === j ? // i == j で偏微分
+                (len)=>diffTranslateAxis(tmp_joint.axis) :
+                (len)=>translateAxis(tmp_joint.axis,len))
+                      
+            tmp = mul(translate(...tmp_joint.offset), mat(value), tmp);
+          }
+
+          jac[i][index*3 + 0] = tmp.subset(math.index(0, 3));
+          jac[i][index*3 + 1] = tmp.subset(math.index(1, 3));
+          jac[i][index*3 + 2] = tmp.subset(math.index(2, 3));
+          
       }
+      // 向き拘束
+      else if(constrain.type === ConstrainType.Orientation){
+        const mat = getEffectorMatrix(joints, i)
+        const axis = getTranslate(mul(mat, math.matrix([...axisToVec(joint.axis),0]))).slice(0,3);
 
-      jac[i][index*3 + 0] = tmp.subset(math.index(0, 3));
-      jac[i][index*3 + 1] = tmp.subset(math.index(1, 3));
-      jac[i][index*3 + 2] = tmp.subset(math.index(2, 3));      
+        // 回転ジョイント
+        if(joint.type === JointType.Revolution) {
+          jac[i][index*3 + 0] = axis[0];
+          jac[i][index*3 + 1] = axis[1];
+          jac[i][index*3 + 2] = axis[2];
+        }
+      }      
     }
   });
-
-  // 稼働ルートヤコビアン
-  // const sliderJointJac = 
-  //   range(effector_indices.length)
-  //   .map(()=>math.identity(3))
-  //   .reduce((prev,curr)=>math.concat(prev,curr));
-
-  // return math.concat(sliderJointJac, math.matrix(jac), 0);
+  
   return math.matrix(jac);
 }
 
 // ヤコビアン計算。外積バージョン
-export function computeJacobian2(joints, values, targets) {
-  // ヤコビアンは（関節角度ベクトル長 × エフェクタ数*3次元位置ベクトル長）の行列
-  const jac = math.zeros(values.length, targets.length * 3).toArray();
+export function computeJacobian2(joints, values, constrains) {
+  // ヤコビアンは（関節角度ベクトル長 × 拘束数*3次元）の行列
+  const jac = math.zeros(values.length, constrains.length * 3).toArray();
   
-  // 各エフェクタに対してヤコビアンを求める
-  targets.forEach((target, index) => {
-    // エフェクタの位置の取得
-    const effectorPos = getEffectorPosition(joints, target.joint);
+  // 各拘束に対してヤコビアンを求める
+  constrains.forEach((constrain, index) => {
+    // 拘束対象エフェクタの位置の取得
+    const effectorPos = getEffectorPosition(joints, constrain.joint);
 
-    // エフェクタに対する 先端からルートまでの各ジョイント に関する偏微分を求める
+    // 拘束対象エフェクタに対する 先端からルートまでの各ジョイント に関する偏微分を求める
     // => 現在のリンクから先端までのベクトルの回転を考える。（速度ヤコビアン）
-    for(let i = target.joint; i != -1; i = joints[i].parentIndex){
+    for(let i = constrain.joint; i != -1; i = joints[i].parentIndex){
       const joint = joints[i];
 
       const mat = getEffectorMatrix(joints, i)
       const axis = getTranslate(mul(mat, math.matrix([...axisToVec(joint.axis),0]))).slice(0,3);
 
       // 位置拘束
-      if(target.type === ConstrainType.Position){
+      if(constrain.type === ConstrainType.Position){
         // 回転ジョイント
         if(joint.type === JointType.Revolution) {
           const currentPos = getEffectorPosition(joints, i)
@@ -308,7 +356,7 @@ export function computeJacobian2(joints, values, targets) {
         }
       }
       // 向き拘束
-      else if(target.type === ConstrainType.Orientation){
+      else if(constrain.type === ConstrainType.Orientation){
         // 回転ジョイント
         if(joint.type === JointType.Revolution) {
           jac[i][index*3 + 0] = axis[0];
@@ -349,13 +397,13 @@ export function computeRedundantCoefficients(eta, jac, jacPI) {
   return math.subtract(eta, mul(eta, jac, jacPI));
 }
 
-export function calcNewAnglesAndPositions(joints, _values, diffs, targets) {
+export function calcNewAnglesAndPositions(joints, _values, diffs, constrains) {
   let values = math.clone(_values);
 
   // 加重行列を単位行列で初期化
   const weight = math.identity(joints.length)
   // ヤコビアンの計算
-  const jac = computeJacobian2(joints, values, targets)
+  const jac = computeJacobian(joints, values, constrains)
   // ヤコビアンの擬似逆行列
   const jacPI = computePseudoInverse(jac)
   // ヤコビアンの加重擬似逆行列
@@ -384,30 +432,29 @@ export function calcNewAnglesAndPositions(joints, _values, diffs, targets) {
   return values;
 }
 
-export function solve_jacobian_ik(joints, targets, max_iteration = 1, step = 0.05) {
+export function solve_jacobian_ik(joints, constrains, max_iteration = 1, step = 0.05) {
   let min_dist = Number.MAX_VALUE;
   let best_values = joints.map(e=>e.value)
   let values = math.clone(best_values)
 
-  const target_values = targets.map(e => e.pos);
-  const effector_indices = targets.map(e => e.joint);
+  const constrain_values = constrains.map(e => e.pos);
 
   for (let i of range(max_iteration)) {
     // リンク構造の全長より遠い位置は到達不可能
-    // const length = math.norm(target)
+    // const length = math.norm(constrain)
     // if (length >= 60.5) {
-    //   target /= length
-    //   target *= 60.5
+    //   constrain /= length
+    //   constrain *= 60.5
     // }
 
     // 現在のエフェクタの位置を取得
-    const effector_values = targets.map(e =>
+    const effector_values = constrains.map(e =>
       e.type === ConstrainType.Position ?
         getEffectorPosition(joints, e.joint) : 
         getEffectorOrientation(joints, e.joint));
 
     // 目標位置とエフェクタ位置の差分の計算
-    let diffs = zip(effector_values,target_values).map(([p, t]) => math.subtract(t, p));
+    let diffs = zip(effector_values,constrain_values).map(([p, t]) => math.subtract(t, p));
     const dist_mean = math.mean(diffs.map(diff => math.norm(diff)));
     if (dist_mean < min_dist) {
       min_dist = dist_mean
@@ -422,7 +469,7 @@ export function solve_jacobian_ik(joints, targets, max_iteration = 1, step = 0.0
     diffs = math.multiply(diffs, step / dist_mean);
 
     // 目標エフェクタ変位にしたがって関節角度ベクトルを更新
-    const new_value = calcNewAnglesAndPositions(joints, values, diffs, targets)
+    const new_value = calcNewAnglesAndPositions(joints, values, diffs, constrains)
     values = new_value;
     setJointValues(joints, values)
   }
