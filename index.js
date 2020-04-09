@@ -16,14 +16,15 @@ const canvas = document.getElementById("canvas");
 
 const targets = [
   {bone: 2, pos: [1,1,0], object: null, type: ConstrainType.Position},
-  {bone: 4, pos: [-1,1,0], object: null, type: ConstrainType.Position}
+  {bone: 2, pos: [1,0,0], object: null, type: ConstrainType.Orientation},
+  // {bone: 4, pos: [-1,1,0], object: null, type: ConstrainType.Position}
 ];
 
 let bones = [];
 const root = {
   offset: [0,0,0],
   rotation: [0,0,0],
-  slide: true, // ik計算用スライドジョイントフラグ
+  // slide: true, // ik計算用スライドジョイントフラグ
   children: [{
       offset: [0.5,1,0],
       rotation: [0,0,0],
@@ -33,33 +34,33 @@ const root = {
         children: []
       }]
     },
-    {
-      offset: [-0.5,1,0],
-      rotation: [0,0,0],
-      children: [{
-        offset: [0,1,0],
-        rotation: [0,0,0],
-        children: []
-      }]
-    },
-    {
-      offset: [0.5,0,0],
-      rotation: [Math.PI,0,0],
-      children: [{
-        offset: [0,1,0],
-        rotation: [0,0,0],
-        children: []
-      }]
-    },
-    {
-      offset: [-0.5,0,0],
-      rotation: [Math.PI,0,0],
-      children: [{
-        offset: [0,1,0],
-        rotation: [0,0,0],
-        children: []
-      }]
-    }
+    // {
+    //   offset: [-0.5,1,0],
+    //   rotation: [0,0,0],
+    //   children: [{
+    //     offset: [0,1,0],
+    //     rotation: [0,0,0],
+    //     children: []
+    //   }]
+    // },
+    // {
+    //   offset: [0.5,0,0],
+    //   rotation: [Math.PI,0,0],
+    //   children: [{
+    //     offset: [0,1,0],
+    //     rotation: [0,0,0],
+    //     children: []
+    //   }]
+    // },
+    // {
+    //   offset: [-0.5,0,0],
+    //   rotation: [Math.PI,0,0],
+    //   children: [{
+    //     offset: [0,1,0],
+    //     rotation: [0,0,0],
+    //     children: []
+    //   }]
+    // }
   ]
 }
 
@@ -124,17 +125,33 @@ function draw_imgui(time) {
   {
     // ik計算しやすい形に変換
     const joints = convertBonesToJoints(bones);
-    const targetIndices = targets.map(e=> convertBoneToJointIndex(joints, e.bone));
+    const converted_targets = targets.map(e=> ({
+      ...e,
+      joint: convertBoneToJointIndex(joints, e.bone)
+    }));
 
-    ik.solve_jacobian_ik(joints, targets.map(e=>e.pos), targetIndices, 1);
+    ik.solve_jacobian_ik(joints, converted_targets, 1);
     convertJointsToBones(joints, bones);
     
+    // デバッグ表示
     targets.forEach((target,i) => {
-      if(ImGui.SliderFloat3(`target[${i}]`, target.pos, -2, 2) && target.object){
-        target.object.position.set(...target.pos);
+      const pos = ik.getEffectorPosition(joints, converted_targets[i].joint).toArray();
+
+      if(converted_targets[i].type === ConstrainType.Position){
+        ImGui.SliderFloat3(`target[${i}]`, target.pos, -2, 2)
+        ImGui.SliderFloat3(`effector_pos[${i}]`, pos, -100, 100);
+        if(target.object){
+          target.object.position.set(...target.pos);
+        }
+      }else{
+        const rot = ik.getEffectorOrientation(joints, converted_targets[i].joint);
+        ImGui.SliderAngle3(`target[${i}]`, target.pos, -180, 180)
+        ImGui.SliderAngle3(`effector_rot[${i}]`, rot, -100, 100);
+        if(target.object){
+          target.object.rotation.set(...target.pos);  
+          target.object.position.set(...pos);
+        }
       }
-      const eff_pos = ik.getEffectorPosition(joints, targetIndices[i]).toArray();
-      ImGui.SliderFloat3(`effector_pos[${i}]`, eff_pos, -100, 100);
     })
   }
 
@@ -183,10 +200,16 @@ function init_three() {
 
   // ターゲット
   targets.forEach(target => {
-    const geometry = new THREE.SphereGeometry(0.1);
+    const geometry = target.type === ConstrainType.Position ? 
+      new THREE.SphereGeometry(0.1) :
+      new THREE.CylinderGeometry(0, 0.05, 0.3);
     const material = new THREE.MeshStandardMaterial({color: 0xFFFFFF});
     target.object = new THREE.Mesh(geometry, material);
-    target.object.position.set(...target.pos);
+    if(target.type === ConstrainType.Position){
+      target.object.position.set(...target.pos);
+    }else if(target.type === ConstrainType.Orientation){
+      target.object.rotation.set(...target.pos);
+    }
     scene.add(target.object);
   })
 
@@ -195,7 +218,7 @@ function init_three() {
   // -----------------------------------------
   const build = (bone, parent)=>{
     const height = bone.children.length > 0 ? 1 : 0.1;
-    const geometry = new THREE.CylinderGeometry( 0, 0.1, height);
+    const geometry = new THREE.CylinderGeometry( 0, 0.05, height);
     geometry.vertices.forEach(e=>e.y+=height/2);
     const material = new THREE.MeshStandardMaterial({color: 0xFFC107});
     const mesh = new THREE.Mesh(geometry, material);
