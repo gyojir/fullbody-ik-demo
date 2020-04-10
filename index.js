@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 // import Stats from 'three/examples/jsm/libs/stats.module.js';
 import * as math from "mathjs";
 import * as ImGui_Impl from "imgui-js/dist/imgui_impl.umd";
-import { solve_jacobian_ik, getEffectorPosition, getEffectorOrientation, ConstrainType, JointType } from './ik';
+import { mul, solve_jacobian_ik, getEffectorWorldPosition, getEffectorOrientation, ConstrainType, JointType, getEffectorWorldMatrix, rotXYZ, getRotationXYZ } from './ik';
 import { range, zip } from "./util";
 
 const ImGui = ImGui_Impl.ImGui;
@@ -15,16 +15,18 @@ let clock;
 const canvas = document.getElementById("canvas");
 
 const constrains = [
-  {priority: 1, bone: 2, joint: -1, pos: [1,1,0], object: null, type: ConstrainType.Position},
-  {priority: 0, bone: 2, joint: -1, rot: [1,0,0], object: null, type: ConstrainType.Orientation},
-  {priority: 0, bone: 4, joint: -1, pos: [-1,1,0], object: null, type: ConstrainType.Position}
+  {priority: 0, bone: 2, joint: -1, pos: [1,1,0], object: null, type: ConstrainType.Position},
+  // {priority: 0, bone: 2, joint: -1, rot: [1,0,0], object: null, type: ConstrainType.Orientation},
+  {priority: 1, bone: 0, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: null, type: ConstrainType.OrientationBound},
+  {priority: 1, bone: 2, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: null, type: ConstrainType.OrientationBound},
+  // {priority: 0, bone: 4, joint: -1, pos: [-1,1,0], object: null, type: ConstrainType.Position}
 ];
 
 let bones = [];
 const root = {
   offset: [0,0,0],
   rotation: [0,0,0],
-  slide: true, // ik計算用スライドジョイントフラグ
+  // slide: true, // ik計算用スライドジョイントフラグ
   children: [{
       offset: [0.5,1,0],
       rotation: [0,0,0],
@@ -65,7 +67,8 @@ const root = {
 }
 
 function convertBoneToJointIndex(joints, boneIndex){
-  for(const [index, joint] of joints.entries()) {
+  // ボーンに対応する一番最後のジョイントを選ぶ
+  for(const [index, joint] of [...joints.entries()].reverse()) {
     if(joint.boneIndex === boneIndex){
       return index;
     }
@@ -77,7 +80,7 @@ function convertBoneToJointIndex(joints, boneIndex){
 function convertBonesToJoints(bones){
   const joints = [];
   const indices = [];
-  bones.forEach((bone,i)=>{    
+  bones.forEach((bone,i)=>{
     let parent = (()=> { let j = 0; return ()=> j++ === 0 ? indices[bone.parentIndex] || -1 : joints.length - 1; })();
 
     // value = 関節変位 q
@@ -150,24 +153,37 @@ function draw_imgui(time) {
     convertJointsToBones(joints, bones);
     
     // デバッグ表示
-    constrains.forEach((constrain,i) => {
-      const pos = getEffectorPosition(joints, converted_constrains[i].joint).toArray();
+    converted_constrains.forEach((constrain,i) => {
+      const pos = getEffectorWorldPosition(joints, constrain.joint).toArray();
 
-      if(converted_constrains[i].type === ConstrainType.Position){
-        ImGui.SliderFloat3(`constrain[${i}]`, constrain.pos, -2, 2)
+      if(constrain.type === ConstrainType.Position){
+        ImGui.SliderFloat3(`pos constrain[${i}]`, constrain.pos, -2, 2)
         ImGui.SliderFloat3(`effector_pos[${i}]`, pos, -100, 100);
         if(constrain.object){
           constrain.object.position.set(...constrain.pos);
         }
-      }else{
-        const rot = getEffectorOrientation(joints, converted_constrains[i].joint);
-        SliderAngleFloat3(`constrain[${i}]`, constrain.rot, -180, 180)
+      }
+      else if(constrain.type === ConstrainType.Orientation){
+        const rot = getEffectorOrientation(joints, constrain.joint);
+        SliderAngleFloat3(`rot constrain[${i}]`, constrain.rot, -180, 180)
         SliderAngleFloat3(`effector_rot[${i}]`, rot, -180, 180);
         if(constrain.object){
           constrain.object.rotation.set(...constrain.rot);  
           constrain.object.position.set(...pos);
         }
       }
+      else if(constrain.type === ConstrainType.OrientationBound){
+        const parentBone = bones[constrain.bone].parentIndex;
+        const parent = parentBone != -1 ? getEffectorWorldMatrix(joints, convertBoneToJointIndex(joints,parentBone)) : math.identity(4);
+        const rot = getEffectorOrientation(joints, constrain.joint);
+        SliderAngleFloat3(`rot bound constrain[${i}]`, constrain.base_rot, -180, 180)
+        SliderAngleFloat3(`effector_rot[${i}]`, rot, -180, 180);
+        if(constrain.object){
+          constrain.object.rotation.set(...getRotationXYZ(mul(parent, rotXYZ(...constrain.base_rot))));  
+          constrain.object.position.set(...pos);
+        }
+      }
+      ImGui.Separator();
     })
   }
 
@@ -216,15 +232,18 @@ function init_three() {
 
   // 拘束
   constrains.forEach(constrain => {
-    const geometry = constrain.type === ConstrainType.Position ? 
-      new THREE.SphereGeometry(0.1) :
-      new THREE.CylinderGeometry(0, 0.05, 0.3);
+    const geometry =
+      constrain.type === ConstrainType.Position ? new THREE.SphereGeometry(0.1) :
+      constrain.type === ConstrainType.Orientation ? new THREE.CylinderGeometry(0, 0.05, 0.3) :
+      constrain.type === ConstrainType.OrientationBound ? new THREE.CylinderGeometry(0.1, 0, 0.2) : null;
     const material = new THREE.MeshStandardMaterial({color: 0xFFFFFF, wireframe: true});
     constrain.object = new THREE.Mesh(geometry, material);
     if(constrain.type === ConstrainType.Position){
       constrain.object.position.set(...constrain.pos);
     }else if(constrain.type === ConstrainType.Orientation){
       constrain.object.rotation.set(...constrain.rot);
+    }else if(constrain.type === ConstrainType.Orientation){
+      constrain.object.rotation.set(...constrain.base_rot);
     }
     scene.add(constrain.object);
   })

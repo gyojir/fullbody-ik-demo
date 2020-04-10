@@ -13,3 +13,7 @@ test('getRotationSpherical', ()=>{
     console.log(ret);
     // expect(.toArray()).;
 })
+test('swapMatrix', ()=>{
+    expect(ik.getSwapMatrix(0,1,2).toArray()).toBeDeepCloseTo([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]], 3);
+    expect(ik.getSwapMatrix(2,0,1).toArray()).toBeDeepCloseTo([[0,1,0,0],[0,0,1,0],[1,0,0,0],[0,0,0,1]], 3);
+})

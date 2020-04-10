@@ -6,6 +6,7 @@ import {range, zip} from "./util";
 export const ConstrainType = {
   Position: 0,
   Orientation: 1,
+  OrientationBound: 2,
 };
 
 export const JointType = {
@@ -64,6 +65,16 @@ export function getCrossMatrix(v){
   ]);
 }
 
+// 軸を交換する行列
+export function getSwapMatrix(x,y,z){
+  return math.matrix([
+    [ Number(x==0), Number(y==0), Number(z==0), 0 ],
+    [ Number(x==1), Number(y==1), Number(z==1), 0 ],
+    [ Number(x==2), Number(y==2), Number(z==2), 0 ],
+    [            0,            0,            0, 1 ],
+  ]);
+}
+
 // 3x3行列を4x4行列に拡張
 export function expandToMatrix44(mat){
   const ret = math.resize(mat, [4,4]);
@@ -96,9 +107,15 @@ export function getRotationFromAxis(axis, rad){
 }
 
 // 回転行列から、x軸に直行する回転軸a と 回転後の軸xまわりの回転量を取り出す
-export function getRotationSpherical(rot, base = math.identity(4)){
+// y軸を基準にしたい場合はgetSwapMatrix(2,1,0)とする(x,y,z)->(z,x,y)
+export function getRotationSpherical(rot, base = math.identity(4), swap = math.identity(4)){
   // ベースから見た回転
-  const m = mul(math.transpose(base), rot).toArray();
+  let m = mul(math.transpose(math.resize(base,[3,3])), math.resize(rot,[3,3]));
+  // 軸入れ替え手順(基準ベクトルから見た場合)
+  // 1. [1,0,0]を基準にしたい軸になるよう変換。例) [1,0,0](x,y,z) -> [0,1,0](z,x,y)
+  // 2. 通常通りの回転を行う。
+  // 3. 後の手順でx軸を基準として考えているので戻す。例) z,x,y -> x,y,z
+  m = mul(math.transpose(math.resize(swap,[3,3])), m, math.resize(swap,[3,3])).toArray();
 
   // x軸を合わせるための回転軸a
   const ay = -m[2][0] / Math.sqrt(2*(1 + m[0][0]));
@@ -106,14 +123,14 @@ export function getRotationSpherical(rot, base = math.identity(4)){
 
   // a軸まわりにγ回転する座標 と baseから見たrot(m) を比較
   const gamma = Math.asin(Math.sqrt(ay*ay+az*az)) * 2;
-  const rot_a = getRotationFromAxis([0,ay,az], gamma);
+  const rot_a = math.resize(getRotationFromAxis([0,ay,az], gamma), [3,3]);
   const rot_twist = mul(math.transpose(rot_a), m).toArray();
 
   // y軸がどれだけ回転(x軸回り)したか見る
   const ey = [rot_twist[0][1], rot_twist[1][1], rot_twist[2][1]];
   const twist = Math.atan2(ey[2], ey[1]);
   
-  return [ay, az, twist];
+  return [ay, az, twist, gamma];
 }
 
 export function translate(x,y,z) {
@@ -269,7 +286,31 @@ export function axisToVec(axis){
 }
 
 // エフェクタの姿勢行列取得
-export function getEffectorMatrix(joints, i) {
+export function getBoneLocalMatrix(joints, bone) {
+  let tmp = math.identity(4)
+
+  if(bone === -1){
+    return tmp;
+  }
+
+  // 根元から
+  joints
+    .filter(joint=> joint.boneIndex === bone)
+    .forEach(joint=>{
+      // parent * T * R
+      tmp = mul(tmp, translate(...joint.offset));
+  　　if(joint.type === JointType.Revolution){  
+        tmp = mul(tmp, rotAxis(joint.axis, joint.value));
+      }else{
+        tmp = mul(tmp, translateAxis(joint.axis, joint.value));
+      }
+    });
+
+  return tmp
+}
+
+// エフェクタの姿勢行列取得
+export function getEffectorWorldMatrix(joints, i) {
   let tmp = math.identity(4)
 
   if(i == -1){
@@ -279,6 +320,7 @@ export function getEffectorMatrix(joints, i) {
   while (i != -1) {
     const joint = joints[i];
     
+    // T * R * child
 　　if(joint.type === JointType.Revolution){  
       tmp = mul(rotAxis(joint.axis, joint.value), tmp);
     }else{
@@ -292,11 +334,11 @@ export function getEffectorMatrix(joints, i) {
 }
 
 // エフェクタの位置取得
-export function getEffectorPosition(joints, i) {
+export function getEffectorWorldPosition(joints, i) {
   // 先端の座標系から根元の座標系に変換
   // Max0 * Max1 * Mat2 * Mat3 * [0,0,0,1]
 
-  const tmp = getEffectorMatrix(joints, i)
+  const tmp = getEffectorWorldMatrix(joints, i)
   return math.flatten(tmp.subset(math.index([0, 1, 2], 3)));
 }
 
@@ -305,7 +347,7 @@ export function getEffectorOrientation(joints, i) {
   // 先端の座標系から根元の座標系に変換
   // Max0 * Max1 * Mat2 * Mat3 * [0,0,0,1]
 
-  const tmp = getEffectorMatrix(joints, i)
+  const tmp = getEffectorWorldMatrix(joints, i)
   return getRotationXYZ(tmp);
 }
 
@@ -356,8 +398,9 @@ export function computeJacobian(joints, values, constrains) {
           
       }
       // 向き拘束
-      else if(constrain.type === ConstrainType.Orientation){
-        const mat = getEffectorMatrix(joints, i)
+      else if(constrain.type === ConstrainType.Orientation ||
+              constrain.type === ConstrainType.OrientationBound){
+        const mat = getEffectorWorldMatrix(joints, i)
         const axis = getTranslate(mul(mat, math.matrix([...axisToVec(joint.axis),0]))).slice(0,3);
 
         // 回転ジョイント
@@ -381,21 +424,21 @@ export function computeJacobian2(joints, values, constrains) {
   // 各拘束に対してヤコビアンを求める
   constrains.forEach((constrain, index) => {
     // 拘束対象エフェクタの位置の取得
-    const effectorPos = getEffectorPosition(joints, constrain.joint);
+    const effectorPos = getEffectorWorldPosition(joints, constrain.joint);
 
     // 拘束対象エフェクタに対する 先端からルートまでの各ジョイント に関する偏微分を求める
     // => 現在のリンクから先端までのベクトルの回転を考える。（速度ヤコビアン）
     for(let i = constrain.joint; i != -1; i = joints[i].parentIndex){
       const joint = joints[i];
 
-      const mat = getEffectorMatrix(joints, i)
+      const mat = getEffectorWorldMatrix(joints, i)
       const axis = getTranslate(mul(mat, math.matrix([...axisToVec(joint.axis),0]))).slice(0,3);
 
       // 位置拘束
       if(constrain.type === ConstrainType.Position){
         // 回転ジョイント
         if(joint.type === JointType.Revolution) {
-          const currentPos = getEffectorPosition(joints, i)
+          const currentPos = getEffectorWorldPosition(joints, i)
           const diff = math.subtract(effectorPos, currentPos)
           const cross = math.cross(axis, diff).toArray()
     
@@ -411,7 +454,8 @@ export function computeJacobian2(joints, values, constrains) {
         }
       }
       // 向き拘束
-      else if(constrain.type === ConstrainType.Orientation){
+      else if(constrain.type === ConstrainType.Orientation ||
+              constrain.type === ConstrainType.OrientationBound){
         // 回転ジョイント
         if(joint.type === JointType.Revolution) {
           jac[i][index*3 + 0] = axis[0];
@@ -469,6 +513,10 @@ export function calcJacobianTask(joints, _values, _diffs, _constrains) {
 
   // 高優先度タスク
   const computeHighPriorityTask = (diffs, constrains) =>{
+    if(!diffs.length || !constrains.length){
+      return [math.zeros(joints.length), math.zeros([joints.length,joints.length])];
+    }
+
     // 加重行列を単位行列で初期化
     // const weight = math.identity(joints.length)     
 
@@ -486,7 +534,11 @@ export function calcJacobianTask(joints, _values, _diffs, _constrains) {
   }
 
   // 低優先度タスク
-  const computeLowPriorityTask = (dq0, w, diffs, constrains) => {   
+  const computeLowPriorityTask = (dq0, w, diffs, constrains) => {
+    if(!diffs.length || !constrains.length){
+      return dq0;
+    }
+
     // ヤコビアンの計算
     const jac_aux = computeJacobian2(joints, values, constrains);
     // S = W*Jaux
@@ -532,20 +584,37 @@ export function solve_jacobian_ik(joints, constrains, max_iteration = 1, step = 
   let values = math.clone(best_values)
 
   for (let i of range(max_iteration)) {
+
     // 目標位置と現在エフェクタ位置の差分の計算
-    let diffs = constrains.map(e => {
+    const enables = [];
+    let diffs = constrains.map((e,i) => {
+      enables[i] = true;
+
       // 位置拘束は単純に差分
       if(e.type === ConstrainType.Position){
-        const p = getEffectorPosition(joints, e.joint);
+        const p = getEffectorWorldPosition(joints, e.joint);
         return math.subtract(e.pos, p);
       }
       // 向き拘束は回転軸を計算
       else if(e.type === ConstrainType.Orientation){
-        const curr = math.resize(getEffectorMatrix(joints, e.joint), [3,3]);
-        const target = math.resize(rotXYZ(...e.rot), [3,3]);
+        const curr = getEffectorWorldMatrix(joints, e.joint);
+        const target = rotXYZ(...e.rot);
         const err = getRotationError(target, curr);
-        return mul(curr,err);
+        return mul(math.resize(curr,[3,3]),err);
       }
+      // 向き範囲制限拘束
+      else if(e.type === ConstrainType.OrientationBound){
+        const curr = getBoneLocalMatrix(joints, e.bone);
+        const target = rotXYZ(...e.base_rot);
+        const [ay, az, t, gamma] = getRotationSpherical(curr,target, getSwapMatrix(1,2,0));
+        // 範囲を超えた場合のみ戻す
+        if(gamma > e.bounds.gamma_max){
+          const world = math.resize(getEffectorWorldMatrix(joints, e.joint),[3,3]);
+          const err = getRotationError(target, curr);
+          return mul(world, err);
+        }
+      }
+      enables[i] = false;
       return [0,0,0];
     });
 
@@ -564,7 +633,7 @@ export function solve_jacobian_ik(joints, constrains, max_iteration = 1, step = 
     diffs = math.multiply(diffs, step / dist_mean);
 
     // 目標エフェクタ変位にしたがって関節角度ベクトルを更新
-    values = calcJacobianTask(joints, values, diffs, constrains);
+    values = calcJacobianTask(joints, values, diffs.filter((e,i)=>enables[i]), constrains.filter((e,i)=>enables[i]));
     setJointValues(joints, values);
   }
 
