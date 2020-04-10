@@ -4,8 +4,8 @@ import * as math from "mathjs";
 
 expect.extend({toBeDeepCloseTo, toMatchCloseTo});
 
-test('getRotationRodorigues', ()=>{
-    expect(ik.getRotationRodorigues([0,0,1], Math.PI/2).toArray()).toBeDeepCloseTo([[0,-1,0,0],[1,0,0,0],[0,0,1,0],[0,0,0,1]], 3);
+test('getRotationFromAxis', ()=>{
+    expect(ik.getRotationFromAxis([0,0,1], Math.PI/2).toArray()).toBeDeepCloseTo([[0,-1,0,0],[1,0,0,0],[0,0,1,0],[0,0,0,1]], 3);
 })
 
 test('getRotationSpherical', ()=>{

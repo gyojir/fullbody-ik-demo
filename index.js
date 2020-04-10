@@ -16,7 +16,7 @@ const canvas = document.getElementById("canvas");
 
 const constrains = [
   {priority: 1, bone: 2, joint: -1, pos: [1,1,0], object: null, type: ConstrainType.Position},
-  {priority: 0, bone: 2, joint: -1, pos: [1,0,0], object: null, type: ConstrainType.Orientation},
+  {priority: 0, bone: 2, joint: -1, rot: [1,0,0], object: null, type: ConstrainType.Orientation},
   {priority: 0, bone: 4, joint: -1, pos: [-1,1,0], object: null, type: ConstrainType.Position}
 ];
 
@@ -161,10 +161,10 @@ function draw_imgui(time) {
         }
       }else{
         const rot = getEffectorOrientation(joints, converted_constrains[i].joint);
-        SliderAngleFloat3(`constrain[${i}]`, constrain.pos, -180, 180)
+        SliderAngleFloat3(`constrain[${i}]`, constrain.rot, -180, 180)
         SliderAngleFloat3(`effector_rot[${i}]`, rot, -180, 180);
         if(constrain.object){
-          constrain.object.rotation.set(...constrain.pos);  
+          constrain.object.rotation.set(...constrain.rot);  
           constrain.object.position.set(...pos);
         }
       }
@@ -224,7 +224,7 @@ function init_three() {
     if(constrain.type === ConstrainType.Position){
       constrain.object.position.set(...constrain.pos);
     }else if(constrain.type === ConstrainType.Orientation){
-      constrain.object.rotation.set(...constrain.pos);
+      constrain.object.rotation.set(...constrain.rot);
     }
     scene.add(constrain.object);
   })

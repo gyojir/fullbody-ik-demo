@@ -64,6 +64,7 @@ export function getCrossMatrix(v){
   ]);
 }
 
+// 3x3行列を4x4行列に拡張
 export function expandToMatrix44(mat){
   const ret = math.resize(mat, [4,4]);
   ret._data[3][3] = 1;
@@ -80,7 +81,8 @@ export function getRotationError(matA, matB){
   ]);
 }
 
-export function getRotationRodorigues(axis, rad){
+// 転軸回りに回転する行列を計算
+export function getRotationFromAxis(axis, rad){
   const norm = math.norm(axis);
   if(Math.abs(rad) < Number.EPSILON ||
      norm < Number.EPSILON){
@@ -88,9 +90,12 @@ export function getRotationRodorigues(axis, rad){
   }
   const normalized_axis = math.divide(axis, norm);
   const crossAxis = getCrossMatrix(normalized_axis);
+  // Rodrigues's formula
+  // R(θ) = I + nx * sinθ + nx^2 * (1-cosθ)
   return expandToMatrix44(add(math.identity(3), mul(crossAxis, Math.sin(rad)), mul(crossAxis,crossAxis, 1-Math.cos(rad))));
 }
 
+// 回転行列から、x軸に直行する回転軸a と 回転後の軸xまわりの回転量を取り出す
 export function getRotationSpherical(rot, base = math.identity(4)){
   // ベースから見た回転
   const m = mul(math.transpose(base), rot).toArray();
@@ -99,9 +104,9 @@ export function getRotationSpherical(rot, base = math.identity(4)){
   const ay = -m[2][0] / Math.sqrt(2*(1 + m[0][0]));
   const az = m[1][0] / Math.sqrt(2*(1 + m[0][0]));
 
-  // a軸周りにγ回転する座標 と baseから見たrot(m) を比較
+  // a軸まわりにγ回転する座標 と baseから見たrot(m) を比較
   const gamma = Math.asin(Math.sqrt(ay*ay+az*az)) * 2;
-  const rot_a = getRotationRodorigues([0,ay,az], gamma);
+  const rot_a = getRotationFromAxis([0,ay,az], gamma);
   const rot_twist = mul(math.transpose(rot_a), m).toArray();
 
   // y軸がどれだけ回転(x軸回り)したか見る
@@ -259,30 +264,11 @@ export function diffRotAxis(axis, angle){
   return mat(angle);
 }
 
-
 export function axisToVec(axis){
   return [Number(axis == 0),Number(axis == 1),Number(axis == 2)];
 }
 
-export function _getEffectorMatrix(joints, i) {
-  let tmp = math.identity(4)
-
-  if(i == -1){
-    i = joints.length - 1;
-  }
-
-  for (let joint of joints.slice(0, i + 1)) {
-    tmp = mul(tmp, translate(...joint.offset));
-
-　　if(joint.type === JointType.Revolution){  
-      tmp = mul(tmp, rotAxis(joint.axis, joint.value));
-    }else{
-      tmp = mul(tmp, translateAxis(joint.axis, joint.value));
-    }
-  }
-  return tmp
-}
-
+// エフェクタの姿勢行列取得
 export function getEffectorMatrix(joints, i) {
   let tmp = math.identity(4)
 
@@ -462,12 +448,14 @@ export function computeWeightedPseudoInverse(jac, weight) {
   return mul(inv(mul(jacT, WI, jac)), jacT, WI)
 }
 
+// ヤコビアンの一般解の冗長項を計算
 export function computeRedundantCoefficients(eta, jac, jacPI) {
   // vRC = eta - eta * J * J^+
   return math.subtract(eta, mul(eta, jac, jacPI));
 }
 
-export function calcNewAnglesAndPositions(joints, _values, _diffs, _constrains) {
+// ヤコビアンを計算して、与えられた関節速度を実現する関節パラメータを計算
+export function calcJacobianTask(joints, _values, _diffs, _constrains) {
   let values = math.clone(_values);
 
   // 優先度でdiffとconstrainsを分解
@@ -537,34 +525,31 @@ export function calcNewAnglesAndPositions(joints, _values, _diffs, _constrains) 
   return values;
 }
 
+// ヤコビアンIK計算
 export function solve_jacobian_ik(joints, constrains, max_iteration = 1, step = 0.05) {
   let min_dist = Number.MAX_VALUE;
   let best_values = joints.map(e=>e.value)
   let values = math.clone(best_values)
 
   for (let i of range(max_iteration)) {
-    // リンク構造の全長より遠い位置は到達不可能
-    // const length = math.norm(constrain)
-    // if (length >= 60.5) {
-    //   constrain /= length
-    //   constrain *= 60.5
-    // }
-
     // 目標位置と現在エフェクタ位置の差分の計算
     let diffs = constrains.map(e => {
+      // 位置拘束は単純に差分
       if(e.type === ConstrainType.Position){
         const p = getEffectorPosition(joints, e.joint);
         return math.subtract(e.pos, p);
       }
-      if(e.type === ConstrainType.Orientation){
+      // 向き拘束は回転軸を計算
+      else if(e.type === ConstrainType.Orientation){
         const curr = math.resize(getEffectorMatrix(joints, e.joint), [3,3]);
-        const target = math.resize(rotXYZ(...e.pos), [3,3]);
+        const target = math.resize(rotXYZ(...e.rot), [3,3]);
         const err = getRotationError(target, curr);
-
         return mul(curr,err);
       }
       return [0,0,0];
     });
+
+    // 差分をまとめる
     const dist_mean = math.mean(diffs.map(diff => math.norm(diff)));
     if (dist_mean < min_dist) {
       min_dist = dist_mean
@@ -579,9 +564,8 @@ export function solve_jacobian_ik(joints, constrains, max_iteration = 1, step = 
     diffs = math.multiply(diffs, step / dist_mean);
 
     // 目標エフェクタ変位にしたがって関節角度ベクトルを更新
-    const new_value = calcNewAnglesAndPositions(joints, values, diffs, constrains)
-    values = new_value;
-    setJointValues(joints, values)
+    values = calcJacobianTask(joints, values, diffs, constrains);
+    setJointValues(joints, values);
   }
 
   return best_values;
