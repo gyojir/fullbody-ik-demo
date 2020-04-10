@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 // import Stats from 'three/examples/jsm/libs/stats.module.js';
+import * as math from "mathjs";
 import * as ImGui_Impl from "imgui-js/dist/imgui_impl.umd";
 import { solve_jacobian_ik, getEffectorPosition, getEffectorOrientation, ConstrainType, JointType } from './ik';
 import { range, zip } from "./util";
@@ -14,9 +15,9 @@ let clock;
 const canvas = document.getElementById("canvas");
 
 const constrains = [
-  {bone: 2, joint: -1, pos: [1,1,0], object: null, type: ConstrainType.Position},
-  // {bone: 2, joint: -1, pos: [1,0,0], object: null, type: ConstrainType.Orientation},
-  {bone: 4, joint: -1, pos: [-1,1,0], object: null, type: ConstrainType.Position}
+  {priority: 1, bone: 2, joint: -1, pos: [1,1,0], object: null, type: ConstrainType.Position},
+  {priority: 0, bone: 2, joint: -1, pos: [1,0,0], object: null, type: ConstrainType.Orientation},
+  {priority: 1, bone: 4, joint: -1, pos: [-1,1,0], object: null, type: ConstrainType.Position}
 ];
 
 let bones = [];
@@ -76,16 +77,22 @@ function convertBoneToJointIndex(joints, boneIndex){
 function convertBonesToJoints(bones){
   const joints = [];
   const indices = [];
-  bones.forEach((bone,i)=>{
+  bones.forEach((bone,i)=>{    
+    let parent = (()=> { let j = 0; return ()=> j++ === 0 ? indices[bone.parentIndex] || -1 : joints.length - 1; })();
+
     // value = 関節変位 q
+    // スライダジョイントを挿入
     if(bone.slide){
-      joints.push({ boneIndex: i, type: JointType.Slide, axis: 0, value: bone.offset[0], offset: [0,0,0], parentIndex: indices[bone.parentIndex] || -1 });
-      joints.push({ boneIndex: i, type: JointType.Slide, axis: 1, value: bone.offset[1], offset: [0,0,0], parentIndex: joints.length - 1 });
-      joints.push({ boneIndex: i, type: JointType.Slide, axis: 2, value: bone.offset[2], offset: [0,0,0], parentIndex: joints.length - 1 });
+      joints.push({ boneIndex: i, type: JointType.Slide, axis: 0, value: bone.offset[0], offset: [0,0,0], parentIndex: parent() });
+      joints.push({ boneIndex: i, type: JointType.Slide, axis: 1, value: bone.offset[1], offset: [0,0,0], parentIndex: parent() });
+      joints.push({ boneIndex: i, type: JointType.Slide, axis: 2, value: bone.offset[2], offset: [0,0,0], parentIndex: parent() });
     }
-    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 0, value: bone.rotation[0], offset: bone.slide ? [0,0,0] : bone.offset, angle_range: [0, 180], parentIndex: bone.slide ? joints.length - 1 : indices[bone.parentIndex] || -1 });
-    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 1, value: bone.rotation[1], offset: [0,0,0], angle_range: [0, 180], parentIndex: joints.length - 1 });
-    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 2, value: bone.rotation[2], offset: [0,0,0], angle_range: [0, 180], parentIndex: joints.length - 1 });
+
+    // XYZ回転
+    let offset = bone.slide ? [0,0,0] : bone.offset;
+    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 0, value: bone.rotation[0], offset: offset, angle_range: [0, 180], parentIndex: parent() });
+    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 1, value: bone.rotation[1], offset: [0,0,0], angle_range: [0, 180], parentIndex: parent() });
+    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 2, value: bone.rotation[2], offset: [0,0,0], angle_range: [0, 180], parentIndex: parent() });
     indices[i] = joints.length - 1;
   });
   return joints;
@@ -101,17 +108,27 @@ function convertJointsToBones(joints, bones){
   });
 }
 
+
+export function SliderAngleFloat3(label, v_rad, v_degrees_min = -360.0, v_degrees_max = +360.0) {
+  let _v_rad = math.clone(v_rad);
+  _v_rad = math.multiply(_v_rad, 180 / Math.PI);
+  const ret = ImGui.SliderFloat3(label, _v_rad, v_degrees_min, v_degrees_max, "%.1f deg");
+  _v_rad = math.multiply(_v_rad, Math.PI / 180);
+  v_rad.forEach((e,i)=> v_rad[i] = _v_rad[i]);
+  return ret;
+}
+
 function draw_imgui(time) {   
   ImGui_Impl.NewFrame(time);
   ImGui.NewFrame();
-  ImGui.Begin("My Window");
+  ImGui.Begin("Debug Window");
   ImGui.Dummy(new ImGui.ImVec2(400,0));
   
   // 全ジョイント表示
   bones.forEach((bone,i)=>{
     ImGui.PushID(i);
     ImGui.SliderFloat3(`pos[${i}]`, bone.offset, -10, 10);
-    ImGui.SliderAngle3(`rot[${i}]`, bone.rotation);
+    SliderAngleFloat3(`rot[${i}]`, bone.rotation);
     if(bone.object){
       bone.object.position.set(...bone.offset);
       bone.object.rotation.set(...bone.rotation);
@@ -144,8 +161,8 @@ function draw_imgui(time) {
         }
       }else{
         const rot = getEffectorOrientation(joints, converted_constrains[i].joint);
-        ImGui.SliderAngle3(`constrain[${i}]`, constrain.pos, -180, 180)
-        ImGui.SliderAngle3(`effector_rot[${i}]`, rot, -180, 180);
+        SliderAngleFloat3(`constrain[${i}]`, constrain.pos, -180, 180)
+        SliderAngleFloat3(`effector_rot[${i}]`, rot, -180, 180);
         if(constrain.object){
           constrain.object.rotation.set(...constrain.pos);  
           constrain.object.position.set(...pos);

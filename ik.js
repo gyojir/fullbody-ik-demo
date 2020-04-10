@@ -6,30 +6,33 @@ import {range, zip} from "./util";
 export const ConstrainType = {
   Position: 0,
   Orientation: 1,
-}
+};
 
 export const JointType = {
   Revolution: 0,
   Slide: 1,
-}
+};
 
 
 const RAD_TO_DEG = 180.0 / Math.PI;
 const DEG_TO_RAD = Math.PI / 180.0;
 
-function inv(mat){
+export function inv(mat){
   return math.matrix(ml.inverse(new ml.Matrix(mat.toArray()), true).data.map(e=>[].slice.call(e)));
 }
 
-function mul(...matrices) {
+export function mul(...matrices) {
   return matrices.reduce((prev, curr) => math.multiply(prev, curr));
 }
+export function add(...matrices) {
+  return matrices.reduce((prev, curr) => math.add(prev, curr));
+}
 
-function getTranslate(mat){
+export function getTranslate(mat){
   return math.squeeze(mat).toArray();
 }
 
-function getRotationXYZ(mat){
+export function getRotationXYZ(mat){
   // rotX(x) * rotY(y) * rotZ(z) =
   //  |  CyCz        -CySz         Sy   |
   //  |  SxSyCz+CxSz -SxSySz+CxCz -SxCy |
@@ -51,10 +54,64 @@ function getRotationXYZ(mat){
       Math.atan2(m[0][2], sq_m12_m22),
       Math.atan2(-m[0][1], m[0][0])]
   }
-
 }
 
-function translate(x,y,z) {
+export function getCrossMatrix(v){
+  return math.matrix([
+    [   0, -v[2],  v[1]],
+    [ v[2],    0, -v[0]],
+    [-v[1], v[0],     0],
+  ]);
+}
+
+export function expandToMatrix44(mat){
+  const ret = math.resize(mat, [4,4]);
+  ret._data[3][3] = 1;
+  return ret;
+}
+
+// 回転行列の誤差ベクトル A - B
+export function getRotationError(matA, matB){  
+  const diff = mul(math.transpose(matB), matA).toArray();
+  return mul(0.5, [
+    diff[2][1] - diff[1][2],
+    diff[0][2] - diff[2][0],
+    diff[1][0] - diff[0][1]
+  ]);
+}
+
+export function getRotationRodorigues(axis, rad){
+  const norm = math.norm(axis);
+  if(Math.abs(rad) < Number.EPSILON ||
+     norm < Number.EPSILON){
+    return math.identity(4);
+  }
+  const normalized_axis = math.divide(axis, norm);
+  const crossAxis = getCrossMatrix(normalized_axis);
+  return expandToMatrix44(add(math.identity(3), mul(crossAxis, Math.sin(rad)), mul(crossAxis,crossAxis, 1-Math.cos(rad))));
+}
+
+export function getRotationSpherical(rot, base = math.identity(4)){
+  // ベースから見た回転
+  const m = mul(math.transpose(base), rot).toArray();
+
+  // x軸を合わせるための回転軸a
+  const ay = -m[2][0] / Math.sqrt(2*(1 + m[0][0]));
+  const az = m[1][0] / Math.sqrt(2*(1 + m[0][0]));
+
+  // a軸周りにγ回転する座標 と baseから見たrot(m) を比較
+  const gamma = Math.asin(Math.sqrt(ay*ay+az*az)) * 2;
+  const rot_a = getRotationRodorigues([0,ay,az], gamma);
+  const rot_twist = mul(math.transpose(rot_a), m).toArray();
+
+  // y軸がどれだけ回転(x軸回り)したか見る
+  const ey = [rot_twist[0][1], rot_twist[1][1], rot_twist[2][1]];
+  const twist = Math.atan2(ey[2], ey[1]);
+  
+  return [ay, az, twist];
+}
+
+export function translate(x,y,z) {
   return math.matrix([
     [1.0, 0.0, 0.0, x],
     [0.0, 1.0, 0.0, y],
@@ -62,7 +119,7 @@ function translate(x,y,z) {
     [0.0, 0.0, 0.0, 1.0]])
 }
 
-function translateX(dLen) {
+export function translateX(dLen) {
   return math.matrix([
     [1.0, 0.0, 0.0, dLen],
     [0.0, 1.0, 0.0, 0.0],
@@ -70,7 +127,7 @@ function translateX(dLen) {
     [0.0, 0.0, 0.0, 1.0]])
 }
 
-function translateY(dLen) {
+export function translateY(dLen) {
   return math.matrix([
     [1.0, 0.0, 0.0, 0.0],
     [0.0, 1.0, 0.0, dLen],
@@ -78,7 +135,7 @@ function translateY(dLen) {
     [0.0, 0.0, 0.0, 1.0]])
 }
 
-function translateZ(dLen) {
+export function translateZ(dLen) {
   return math.matrix(
     [[1.0, 0.0, 0.0, 0.0],
     [0.0, 1.0, 0.0, 0.0],
@@ -86,14 +143,14 @@ function translateZ(dLen) {
     [0.0, 0.0, 0.0, 1.0]])
 }
 
-function translateAxis(axis, len){
+export function translateAxis(axis, len){
   let mat = axis == 0 ? translateX :
             axis == 1 ? translateY :
             axis == 2 ? translateZ : ()=>1;
   return mat(len);
 }
 
-function diffTranslateX() {
+export function diffTranslateX() {
   return math.matrix([
     [0.0, 0.0, 0.0, 1.0],
     [0.0, 0.0, 0.0, 0.0],
@@ -101,7 +158,7 @@ function diffTranslateX() {
     [0.0, 0.0, 0.0, 0.0]]);
 }
 
-function diffTranslateY() {
+export function diffTranslateY() {
   return math.matrix([
     [0.0, 0.0, 0.0, 0.0],
     [0.0, 0.0, 0.0, 1.0],
@@ -109,7 +166,7 @@ function diffTranslateY() {
     [0.0, 0.0, 0.0, 0.0]]);
 }
 
-function diffTranslateZ() {
+export function diffTranslateZ() {
   return math.matrix([
     [0.0, 0.0, 0.0, 0.0],
     [0.0, 0.0, 0.0, 0.0],
@@ -117,14 +174,14 @@ function diffTranslateZ() {
     [0.0, 0.0, 0.0, 0.0]]);
 }
 
-function diffTranslateAxis(axis){
+export function diffTranslateAxis(axis){
   let mat = axis == 0 ? diffTranslateX :
             axis == 1 ? diffTranslateY :
             axis == 2 ? diffTranslateZ : ()=>1;
   return mat();
 }
 
-function rotX(r) {
+export function rotX(r) {
   const c = math.cos(r)
   const s = math.sin(r)
   return math.matrix([
@@ -134,7 +191,7 @@ function rotX(r) {
     [0.0, 0.0, 0.0, 1.0]])
 }
 
-function rotY(r) {
+export function rotY(r) {
   const c = math.cos(r)
   const s = math.sin(r)
   return math.matrix([
@@ -144,7 +201,7 @@ function rotY(r) {
     [0.0, 0.0, 0.0, 1.0]])
 }
 
-function rotZ(r) {
+export function rotZ(r) {
   const c = math.cos(r)
   const s = math.sin(r)
   return math.matrix([
@@ -154,14 +211,18 @@ function rotZ(r) {
     [0.0, 0.0, 0.0, 1.0]])
 }
 
-function rotAxis(axis, angle){
+export function rotXYZ(x,y,z) {
+  return mul(rotX(x), rotY(y), rotZ(z));
+}
+
+export function rotAxis(axis, angle){
   let mat = axis == 0 ? rotX :
             axis == 1 ? rotY :
             axis == 2 ? rotZ : ()=>1;
   return mat(angle);
 }
 
-function diffRotX(r) {
+export function diffRotX(r) {
   const c = math.cos(r)
   const s = math.sin(r)
   return math.matrix([
@@ -171,7 +232,7 @@ function diffRotX(r) {
     [0.0, 0.0, 0.0, 0.0]])
 }
 
-function diffRotY(r) {
+export function diffRotY(r) {
   const c = math.cos(r)
   const s = math.sin(r)
   return math.matrix([
@@ -181,7 +242,7 @@ function diffRotY(r) {
     [0.0, 0.0, 0.0, 0.0]])
 }
 
-function diffRotZ(r) {
+export function diffRotZ(r) {
   const c = math.cos(r)
   const s = math.sin(r)
   return math.matrix([
@@ -191,7 +252,7 @@ function diffRotZ(r) {
     [0.0, 0.0, 0.0, 0.0]])
 }
 
-function diffRotAxis(axis, angle){
+export function diffRotAxis(axis, angle){
   let mat = axis == 0 ? diffRotX :
             axis == 1 ? diffRotY :
             axis == 2 ? diffRotZ : ()=>1;
@@ -199,7 +260,7 @@ function diffRotAxis(axis, angle){
 }
 
 
-function axisToVec(axis){
+export function axisToVec(axis){
   return [Number(axis == 0),Number(axis == 1),Number(axis == 2)];
 }
 
@@ -381,6 +442,13 @@ export function computePseudoInverse(jac) {
   return math.multiply(inv(math.multiply(jacT, jac)), jacT);
 }
 
+export function computeSRInverse(jac) {
+  const jacT = math.transpose(jac);
+  const k = 0.9;
+  // (J^T * J + λI)^-1 * J^T
+  return math.multiply(inv(math.add(math.multiply(jacT, jac),  mul(k, math.identity(jac.size()[1])))), jacT);
+}
+
 export function computeWeightedPseudoInverse(jac, weight) {
   // inverse(W)
   const WI = inv(math.matrix(weight))
@@ -402,37 +470,85 @@ export function computeRedundantCoefficients(eta, jac, jacPI) {
   return math.subtract(eta, mul(eta, jac, jacPI));
 }
 
-export function calcNewAnglesAndPositions(joints, _values, diffs, constrains) {
+export function calcNewAnglesAndPositions(joints, _values, _diffs, _constrains) {
   let values = math.clone(_values);
 
-  // 加重行列を単位行列で初期化
-  const weight = math.identity(joints.length)
-  // ヤコビアンの計算
-  const jac = computeJacobian(joints, values, constrains)
-  // ヤコビアンの擬似逆行列
-  const jacPI = computePseudoInverse(jac)
-  // ヤコビアンの加重擬似逆行列
-  const jacWPI = computeWeightedPseudoInverse(jac, weight)
-  // 目標エフェクタ変位×加重擬似逆行列
-  // Δq = Δp * J^+
-  const dq = mul(math.flatten(diffs), jacWPI).toArray();
-  values = math.add(values, dq);
-  // 冗長変数etaを使って可動範囲を超えた場合に元に戻すように角変位を与える
-  // ↑参考 http://sssiii.seesaa.net/article/383711810.html
-  let eta = math.zeros(joints.length).toArray() // ゼロクリア
-  joints.forEach((joint, i) => {
-    if(joint.type === JointType.Revolution){
-      if (values[i] > joint.angle_range[1] * DEG_TO_RAD) { // 最小値より小さければ戻す
-        eta[i] = (joint.angle_range[1] * DEG_TO_RAD) - values[i];
-      }else if (values[i] < joint.angle_range[0] * DEG_TO_RAD) { // 最大値より大きければ戻す
-        eta[i] = (joint.angle_range[0] * DEG_TO_RAD) - values[i];
-      }
-    }
+  // 優先度でdiffとconstrainsを分解
+  const prioritized_constrains = [[],[]];
+  const prioritized_diffs = [[],[]];
+  zip(_diffs, _constrains).forEach(([diff,constrain])=>{
+    const p = constrain.priority > 0 ? 0 : 1;
+    prioritized_constrains[p].push(constrain);
+    prioritized_diffs[p].push(diff);
   });
-  // 冗長項の計算   
-  const rc = computeRedundantCoefficients(eta, jac, jacPI).toArray();
-  // 冗長項を関節角度ベクトルに加える
-  values = math.add(values, rc);
+
+  const computeHighPriorityTask = (diffs, constrains) =>{
+    // ヤコビアンの計算
+    const jac = computeJacobian2(joints, values, constrains)
+    // ヤコビアンの擬似逆行列
+    const jacPI = computePseudoInverse(jac)
+    // 目標エフェクタ変位×加重擬似逆行列
+    // Δq = Δp * J^+
+    const dq0 = mul(math.flatten(diffs), jacPI).toArray();    
+    // W = (I-JJ^+) 冗長項
+    const w = math.subtract(math.identity(joints.length), mul(jac,jacPI));
+
+    return [dq0, w];
+  }
+
+  const computeLowPriorityTask = (dq0, w, diffs, constrains) => {        
+    // ヤコビアンの計算
+    const jac_aux = computeJacobian2(joints, values, constrains);
+    // S = W*Jaux
+    const s = mul(w, jac_aux);
+    // S* = SR Invers of S
+    const sSI = computeSRInverse(s);
+    // y = (paux - Δq0*Jaux)*(S*)
+    const y = mul(math.subtract(math.flatten(diffs), mul(dq0,jac_aux)), sSI);
+
+    // Δq = Δq0 + yW
+    return add(dq0, mul(y,w)).toArray();
+  }
+  
+  // 優先度順にタスク実行
+  const [dq0, w] = computeHighPriorityTask(prioritized_diffs[0], prioritized_constrains[0]);
+  const dq = computeLowPriorityTask(dq0, w, prioritized_diffs[1], prioritized_constrains[1]);
+  values = math.add(values, dq);
+
+  // zip([...prioritized_diffs.entries()], [...prioritized_constrains.entries()]).forEach(([[_,diffs], [__,constrains]])=>{
+  //   // 加重行列を単位行列で初期化
+  //   const weight = math.identity(joints.length)
+  //   // ヤコビアンの計算
+  //   const jac = computeJacobian2(joints, values, constrains)
+  //   // ヤコビアンの擬似逆行列
+  //   const jacPI = computeSRInverse(jac)
+  //   // ヤコビアンの加重擬似逆行列
+  //   const jacWPI = computeWeightedPseudoInverse(jac, weight)
+  //   // 目標エフェクタ変位×加重擬似逆行列
+  //   // Δq = Δp * J^+
+  //   const dq = mul(math.flatten(diffs), jacWPI).toArray();
+  //   values = math.add(values, dq);
+
+  //   // // 冗長変数etaを使って可動範囲を超えた場合に元に戻すように角変位を与える
+  //   // // ↑参考 http://sssiii.seesaa.net/article/383711810.html
+  //   // let eta = math.zeros(joints.length).toArray() // ゼロクリア
+  //   // joints.forEach((joint, i) => {
+  //   //   if(joint.type === JointType.Revolution){
+  //   //     if (values[i] > joint.angle_range[1] * DEG_TO_RAD) { // 最小値より小さければ戻す
+  //   //       eta[i] = (joint.angle_range[1] * DEG_TO_RAD) - values[i];
+  //   //     }else if (values[i] < joint.angle_range[0] * DEG_TO_RAD) { // 最大値より大きければ戻す
+  //   //       eta[i] = (joint.angle_range[0] * DEG_TO_RAD) - values[i];
+  //   //     }
+  //   //   }
+  //   // });
+  //   // // 冗長項の計算   
+  //   // const rc = computeRedundantCoefficients(eta, jac, jacPI).toArray();
+
+
+  //   // 冗長項を関節角度ベクトルに加える
+  //   // values = math.add(values, rc);    
+  // });
+
 
   return values;
 }
@@ -442,8 +558,6 @@ export function solve_jacobian_ik(joints, constrains, max_iteration = 1, step = 
   let best_values = joints.map(e=>e.value)
   let values = math.clone(best_values)
 
-  const constrain_values = constrains.map(e => e.pos);
-
   for (let i of range(max_iteration)) {
     // リンク構造の全長より遠い位置は到達不可能
     // const length = math.norm(constrain)
@@ -452,14 +566,21 @@ export function solve_jacobian_ik(joints, constrains, max_iteration = 1, step = 
     //   constrain *= 60.5
     // }
 
-    // 現在のエフェクタの位置を取得
-    const effector_values = constrains.map(e =>
-      e.type === ConstrainType.Position ?
-        getEffectorPosition(joints, e.joint) : 
-        getEffectorOrientation(joints, e.joint));
+    // 目標位置と現在エフェクタ位置の差分の計算
+    let diffs = constrains.map(e => {
+      if(e.type === ConstrainType.Position){
+        const p = getEffectorPosition(joints, e.joint);
+        return math.subtract(e.pos, p);
+      }
+      if(e.type === ConstrainType.Orientation){
+        const curr = math.resize(getEffectorMatrix(joints, e.joint), [3,3]);
+        const target = math.resize(rotXYZ(...e.pos), [3,3]);
+        const err = getRotationError(target, curr);
 
-    // 目標位置とエフェクタ位置の差分の計算
-    let diffs = zip(effector_values,constrain_values).map(([p, t]) => math.subtract(t, p));
+        return mul(curr,err);
+      }
+      return [0,0,0];
+    });
     const dist_mean = math.mean(diffs.map(diff => math.norm(diff)));
     if (dist_mean < min_dist) {
       min_dist = dist_mean
