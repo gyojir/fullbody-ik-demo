@@ -305,6 +305,7 @@ export function getEffectorMatrix(joints, i) {
   return tmp
 }
 
+// エフェクタの位置取得
 export function getEffectorPosition(joints, i) {
   // 先端の座標系から根元の座標系に変換
   // Max0 * Max1 * Mat2 * Mat3 * [0,0,0,1]
@@ -313,6 +314,7 @@ export function getEffectorPosition(joints, i) {
   return math.flatten(tmp.subset(math.index([0, 1, 2], 3)));
 }
 
+// エフェクタの方向取得
 export function getEffectorOrientation(joints, i) {
   // 先端の座標系から根元の座標系に変換
   // Max0 * Max1 * Mat2 * Mat3 * [0,0,0,1]
@@ -321,6 +323,7 @@ export function getEffectorOrientation(joints, i) {
   return getRotationXYZ(tmp);
 }
 
+// ジョイントのパラメータ適用
 export function setJointValues(joints, values) {
   for (let [joint, value] of zip(joints, values)) {
     joint.value = value
@@ -436,12 +439,14 @@ export function computeJacobian2(joints, values, constrains) {
   return math.matrix(jac);
 }
 
+// 疑似逆行列計算
 export function computePseudoInverse(jac) {
   const jacT = math.transpose(jac);
   // (J^T * J)^-1 * J^T
   return math.multiply(inv(math.multiply(jacT, jac)), jacT);
 }
 
+// Singularity-Robust Inverse計算
 export function computeSRInverse(jac) {
   const jacT = math.transpose(jac);
   const k = 0.9;
@@ -449,20 +454,12 @@ export function computeSRInverse(jac) {
   return math.multiply(inv(math.add(math.multiply(jacT, jac),  mul(k, math.identity(jac.size()[1])))), jacT);
 }
 
+// 重み付き疑似逆行列計算
 export function computeWeightedPseudoInverse(jac, weight) {
-  // inverse(W)
-  const WI = inv(math.matrix(weight))
-  // J^T * W
-  const JtWi = math.multiply(math.transpose(jac), WI);
-  // J^T * W^-1 * J
-  const JtWiJ = math.multiply(JtWi, jac);
-  // (J^T * W^-1 * J)^-1
-  const JtWiJi = inv(JtWiJ)
-  // (J^T * W^-1 * J)^-1 * J^T
-  const JtWiJiJt = math.multiply(JtWiJi, math.transpose(jac))
+  const jacT = math.transpose(jac);
+  const WI = inv(math.matrix(weight));
   // (J^T * W^-1 * J)^-1 * J^T * W^-1
-  const WPI = math.multiply(JtWiJiJt, WI)
-  return WPI
+  return mul(inv(mul(jacT, WI, jac)), jacT, WI)
 }
 
 export function computeRedundantCoefficients(eta, jac, jacPI) {
@@ -482,7 +479,11 @@ export function calcNewAnglesAndPositions(joints, _values, _diffs, _constrains) 
     prioritized_diffs[p].push(diff);
   });
 
+  // 高優先度タスク
   const computeHighPriorityTask = (diffs, constrains) =>{
+    // 加重行列を単位行列で初期化
+    // const weight = math.identity(joints.length)     
+
     // ヤコビアンの計算
     const jac = computeJacobian2(joints, values, constrains)
     // ヤコビアンの擬似逆行列
@@ -496,7 +497,8 @@ export function calcNewAnglesAndPositions(joints, _values, _diffs, _constrains) 
     return [dq0, w];
   }
 
-  const computeLowPriorityTask = (dq0, w, diffs, constrains) => {        
+  // 低優先度タスク
+  const computeLowPriorityTask = (dq0, w, diffs, constrains) => {   
     // ヤコビアンの計算
     const jac_aux = computeJacobian2(joints, values, constrains);
     // S = W*Jaux
@@ -515,40 +517,22 @@ export function calcNewAnglesAndPositions(joints, _values, _diffs, _constrains) 
   const dq = computeLowPriorityTask(dq0, w, prioritized_diffs[1], prioritized_constrains[1]);
   values = math.add(values, dq);
 
-  // zip([...prioritized_diffs.entries()], [...prioritized_constrains.entries()]).forEach(([[_,diffs], [__,constrains]])=>{
-  //   // 加重行列を単位行列で初期化
-  //   const weight = math.identity(joints.length)
-  //   // ヤコビアンの計算
-  //   const jac = computeJacobian2(joints, values, constrains)
-  //   // ヤコビアンの擬似逆行列
-  //   const jacPI = computeSRInverse(jac)
-  //   // ヤコビアンの加重擬似逆行列
-  //   const jacWPI = computeWeightedPseudoInverse(jac, weight)
-  //   // 目標エフェクタ変位×加重擬似逆行列
-  //   // Δq = Δp * J^+
-  //   const dq = mul(math.flatten(diffs), jacWPI).toArray();
-  //   values = math.add(values, dq);
-
-  //   // // 冗長変数etaを使って可動範囲を超えた場合に元に戻すように角変位を与える
-  //   // // ↑参考 http://sssiii.seesaa.net/article/383711810.html
-  //   // let eta = math.zeros(joints.length).toArray() // ゼロクリア
-  //   // joints.forEach((joint, i) => {
-  //   //   if(joint.type === JointType.Revolution){
-  //   //     if (values[i] > joint.angle_range[1] * DEG_TO_RAD) { // 最小値より小さければ戻す
-  //   //       eta[i] = (joint.angle_range[1] * DEG_TO_RAD) - values[i];
-  //   //     }else if (values[i] < joint.angle_range[0] * DEG_TO_RAD) { // 最大値より大きければ戻す
-  //   //       eta[i] = (joint.angle_range[0] * DEG_TO_RAD) - values[i];
-  //   //     }
-  //   //   }
-  //   // });
-  //   // // 冗長項の計算   
-  //   // const rc = computeRedundantCoefficients(eta, jac, jacPI).toArray();
-
-
-  //   // 冗長項を関節角度ベクトルに加える
-  //   // values = math.add(values, rc);    
+  // // 冗長変数etaを使って可動範囲を超えた場合に元に戻すように角変位を与える
+  // // ↑参考 http://sssiii.seesaa.net/article/383711810.html
+  // let eta = math.zeros(joints.length).toArray() // ゼロクリア
+  // joints.forEach((joint, i) => {
+  //   if(joint.type === JointType.Revolution){
+  //     if (values[i] > joint.angle_range[1] * DEG_TO_RAD) { // 最小値より小さければ戻す
+  //       eta[i] = (joint.angle_range[1] * DEG_TO_RAD) - values[i];
+  //     }else if (values[i] < joint.angle_range[0] * DEG_TO_RAD) { // 最大値より大きければ戻す
+  //       eta[i] = (joint.angle_range[0] * DEG_TO_RAD) - values[i];
+  //     }
+  //   }
   // });
-
+  // // 冗長項の計算   
+  // const rc = computeRedundantCoefficients(eta, jac, jacPI).toArray();
+  // 冗長項を関節角度ベクトルに加える
+  // values = math.add(values, rc);    
 
   return values;
 }

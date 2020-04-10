@@ -17,7 +17,7 @@ const canvas = document.getElementById("canvas");
 const constrains = [
   {priority: 1, bone: 2, joint: -1, pos: [1,1,0], object: null, type: ConstrainType.Position},
   {priority: 0, bone: 2, joint: -1, pos: [1,0,0], object: null, type: ConstrainType.Orientation},
-  {priority: 1, bone: 4, joint: -1, pos: [-1,1,0], object: null, type: ConstrainType.Position}
+  {priority: 0, bone: 4, joint: -1, pos: [-1,1,0], object: null, type: ConstrainType.Position}
 ];
 
 let bones = [];
@@ -219,7 +219,7 @@ function init_three() {
     const geometry = constrain.type === ConstrainType.Position ? 
       new THREE.SphereGeometry(0.1) :
       new THREE.CylinderGeometry(0, 0.05, 0.3);
-    const material = new THREE.MeshStandardMaterial({color: 0xFFFFFF});
+    const material = new THREE.MeshStandardMaterial({color: 0xFFFFFF, wireframe: true});
     constrain.object = new THREE.Mesh(geometry, material);
     if(constrain.type === ConstrainType.Position){
       constrain.object.position.set(...constrain.pos);
@@ -233,7 +233,7 @@ function init_three() {
   // 組み立て
   // -----------------------------------------
   const build = (bone, parent)=>{
-    const height = bone.children.length > 0 ? 1 : 0.1;
+    const height = bone.children.length > 0 ? 1 : 0.2;
     const geometry = new THREE.CylinderGeometry( 0, 0.05, height);
     geometry.vertices.forEach(e=>e.y+=height/2);
     const material = new THREE.MeshStandardMaterial({color: 0xFFC107});
