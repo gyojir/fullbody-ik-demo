@@ -29,17 +29,33 @@ export function add(...matrices) {
   return matrices.reduce((prev, curr) => math.add(prev, curr));
 }
 
+// 行列成分抽出
+// T*Rx*Rz*Ry*S
+// = | Sx*R00 Sy*R01 Sz*R02 Tx |
+//   | Sx*R10 Sy*R11 Sz*R12 Ty |
+//   | Sx*R20 Sy*R21 Sz*R22 Tz |
+//   |      0      0      0  0 |
+
+// 平行移動
 export function getTranslate(mat){
   return math.squeeze(mat).toArray();
 }
-
+// スケール
+export function getScale(mat){
+  return [
+    math.norm(math.flatten(mat.subset(math.index([0,1,2], [0])))),
+    math.norm(math.flatten(mat.subset(math.index([0,1,2], [1])))),
+    math.norm(math.flatten(mat.subset(math.index([0,1,2], [2]))))
+  ]
+}
+// 回転
 export function getRotationXYZ(mat){
   // rotX(x) * rotY(y) * rotZ(z) =
   //  |  CyCz        -CySz         Sy   |
   //  |  SxSyCz+CxSz -SxSySz+CxCz -SxCy |
   //  | -CxSyCz+SxSz  CxSySz+SxCz  CxCy |
 
-  const m = mat.toArray();
+  const m = cancelScaling(mat).toArray();
   const sq_m12_m22 = Math.sqrt(Math.pow(m[1][2],2) + Math.pow(m[2][2],2));
   
   // Cy==0のときはxを0として計算
@@ -281,8 +297,20 @@ export function diffRotAxis(axis, angle){
   return mat(angle);
 }
 
+export function scale(x,y,z) {
+  return math.matrix([
+    [  x, 0.0, 0.0, 0.0],
+    [0.0,   y, 0.0, 0.0],
+    [0.0, 0.0,   z, 0.0],
+    [0.0, 0.0, 0.0, 1.0]])
+}
+
 export function axisToVec(axis){
   return [Number(axis == 0),Number(axis == 1),Number(axis == 2)];
+}
+
+export function cancelScaling(mat){
+  return mul(mat, scale(...getScale(mat).map(e=> Math.abs(e) < Number.EPSILON ? 1 : 1/e)));
 }
 
 // エフェクタの姿勢行列取得
@@ -297,13 +325,14 @@ export function getBoneLocalMatrix(joints, bone) {
   joints
     .filter(joint=> joint.boneIndex === bone)
     .forEach(joint=>{
-      // parent * T * R
+      // parent * T * R * S
       tmp = mul(tmp, translate(...joint.offset));
   　　if(joint.type === JointType.Revolution){  
         tmp = mul(tmp, rotAxis(joint.axis, joint.value));
       }else{
         tmp = mul(tmp, translateAxis(joint.axis, joint.value));
       }
+      tmp = mul(tmp, scale(...joint.scale));
     });
 
   return tmp
@@ -320,7 +349,8 @@ export function getEffectorWorldMatrix(joints, i) {
   while (i != -1) {
     const joint = joints[i];
     
-    // T * R * child
+    // T * R * S *child
+    tmp = mul(scale(...joint.scale), tmp);
 　　if(joint.type === JointType.Revolution){  
       tmp = mul(rotAxis(joint.axis, joint.value), tmp);
     }else{
@@ -389,7 +419,7 @@ export function computeJacobian(joints, values, constrains) {
                 (len)=>diffTranslateAxis(tmp_joint.axis) :
                 (len)=>translateAxis(tmp_joint.axis,len))
                       
-            tmp = mul(translate(...tmp_joint.offset), mat(value), tmp);
+            tmp = mul(translate(...tmp_joint.offset), mat(value), scale(...tmp_joint.scale), tmp);
           }
 
           jac[i][index*3 + 0] = tmp.subset(math.index(0, 3));
@@ -431,7 +461,7 @@ export function computeJacobian2(joints, values, constrains) {
     for(let i = constrain.joint; i != -1; i = joints[i].parentIndex){
       const joint = joints[i];
 
-      const mat = getEffectorWorldMatrix(joints, i)
+      const mat = cancelScaling(getEffectorWorldMatrix(joints, i));
       const axis = getTranslate(mul(mat, math.matrix([...axisToVec(joint.axis),0]))).slice(0,3);
 
       // 位置拘束
@@ -519,7 +549,6 @@ export function calcJacobianTask(joints, _values, _diffs, _constrains) {
 
     // 加重行列を単位行列で初期化
     // const weight = math.identity(joints.length)     
-
     // ヤコビアンの計算
     const jac = computeJacobian2(joints, values, constrains)
     // ヤコビアンの擬似逆行列
