@@ -21,7 +21,8 @@ const canvas = document.getElementById("canvas");
 let model_bones = [];
 
 const model_constrains = [
-  {priority: 1, bone: 33, joint: -1, pos: [1,1,0], object: null, type: ConstrainType.Position},
+  {priority: 1, bone: 33, joint: -1, pos: [0.5,1,0], object: null, type: ConstrainType.Position},
+  {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: null, type: ConstrainType.Position},
 ];
 
 const constrains = [
@@ -143,9 +144,7 @@ export function SliderAngleFloat3(label, v_rad, v_degrees_min = -360.0, v_degree
   return ret;
 }
 
-function draw_imgui(time) {   
-  ImGui_Impl.NewFrame(time);
-  ImGui.NewFrame();
+function draw_imgui() {   
 
   /*
   {
@@ -179,7 +178,7 @@ function draw_imgui(time) {
       
       // デバッグ表示
       converted_constrains.forEach((constrain,i) => {
-        const pos = getEffectorWorldPosition(joints, constrain.joint).toArray();
+        const pos = getEffectorWorldPosition(joints, constrain.joint);
 
         if(constrain.type === ConstrainType.Position){
           ImGui.SliderFloat3(`pos constrain[${i}]`, constrain.pos, -2, 2)
@@ -225,6 +224,13 @@ function draw_imgui(time) {
     actions.forEach((action,i) => {
       ImGui.SliderFloat(`${action._clip.name} weight`,  (value = action.getEffectiveWeight()) => setWeight(action, value), 0, 1);
     })
+
+    // model→bones
+    model_bones.forEach(bone =>{
+      bone.offset = convertVector3ToArray(bone.object.position);
+      bone.rotation = convertVector3ToArray(bone.object.rotation);
+      bone.scale = convertVector3ToArray(bone.object.scale);
+    });
     
     // ik計算しやすい形に変換
     const joints = convertBonesToJoints(model_bones);
@@ -233,9 +239,10 @@ function draw_imgui(time) {
       joint: convertBoneToJointIndex(joints, e.bone)
     }));
 
-    solve_jacobian_ik(joints, converted_constrains, 1);
+    solve_jacobian_ik(joints, converted_constrains, 10, 0.5);
     convertJointsToBones(joints, model_bones);
 
+    // bones->model
     model_bones.forEach((e,i)=>{
       ImGui.SliderFloat3(`pos[${i}] ${e.object.name}`, e.offset, -100, 100)
       SliderAngleFloat3(`rot[${i}] ${e.object.name}`, e.rotation, -100, 100)
@@ -247,7 +254,7 @@ function draw_imgui(time) {
     
     // デバッグ表示
     converted_constrains.forEach((constrain,i) => {
-      const pos = getEffectorWorldPosition(joints, constrain.joint).toArray();
+      const pos = getEffectorWorldPosition(joints, constrain.joint);
 
       if(constrain.type === ConstrainType.Position){
         ImGui.SliderFloat3(`pos constrain[${i}]`, constrain.pos, -2, 2)
@@ -282,9 +289,6 @@ function draw_imgui(time) {
     ImGui.End(); 
   }
 
-  ImGui.EndFrame();
-  ImGui.Render();
-  ImGui_Impl.RenderDrawData(ImGui.GetDrawData());
 }
 
 function init_three() {
@@ -364,7 +368,7 @@ function init_three() {
         model_bones.push(bone);    
       }
     });
-    model_bones[0].slide = true;
+    // model_bones[0].slide = true;
 
     skeleton = new THREE.SkeletonHelper( model );
     skeleton.visible = true;
@@ -414,17 +418,23 @@ function onWindowResize() {
 function animate(time) {
   const delta = clock.getDelta();
   requestAnimationFrame(animate);
+  ImGui_Impl.NewFrame(time);
+  ImGui.NewFrame();
 
   // スケルトンアニメーション
   if(mixer){
-    // mixer.update( delta );
+    mixer.update( delta );
   }
+
+  draw_imgui();
 
   //
   renderer.render(scene, camera);
   renderer.state.reset();
 
-  draw_imgui(time);
+  ImGui.EndFrame();
+  ImGui.Render();
+  ImGui_Impl.RenderDrawData(ImGui.GetDrawData());
 }
 
 async function init_imgui() {

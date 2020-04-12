@@ -29,6 +29,16 @@ export function add(...matrices) {
   return matrices.reduce((prev, curr) => math.add(prev, curr));
 }
 
+// math.matrix -> Array
+export function matrixToArray3(mat){
+  return math.squeeze(mat).toArray().slice(0,3);
+}
+
+// 正規化
+export function normalize(mat){
+  return math.divide(mat, math.norm(mat));
+}
+
 // 行列成分抽出
 // T*Rx*Rz*Ry*S
 // = | Sx*R00 Sy*R01 Sz*R02 Tx |
@@ -36,16 +46,12 @@ export function add(...matrices) {
 //   | Sx*R20 Sy*R21 Sz*R22 Tz |
 //   |      0      0      0  0 |
 
-// 平行移動
-export function getTranslate(mat){
-  return math.squeeze(mat).toArray();
-}
 // スケール
 export function getScale(mat){
   return [
-    math.norm(math.flatten(mat.subset(math.index([0,1,2], [0])))),
-    math.norm(math.flatten(mat.subset(math.index([0,1,2], [1])))),
-    math.norm(math.flatten(mat.subset(math.index([0,1,2], [2]))))
+    math.norm([mat._data[0][0], mat._data[1][0], mat._data[2][0]]),
+    math.norm([mat._data[0][1], mat._data[1][1], mat._data[2][1]]),
+    math.norm([mat._data[0][2], mat._data[1][2], mat._data[2][2]]),
   ]
 }
 // 回転
@@ -369,7 +375,7 @@ export function getEffectorWorldPosition(joints, i) {
   // Max0 * Max1 * Mat2 * Mat3 * [0,0,0,1]
 
   const tmp = getEffectorWorldMatrix(joints, i)
-  return math.flatten(tmp.subset(math.index([0, 1, 2], 3)));
+  return [tmp._data[0][3], tmp._data[1][3], tmp._data[2][3]];
 }
 
 // エフェクタの方向取得
@@ -422,16 +428,16 @@ export function computeJacobian(joints, values, constrains) {
             tmp = mul(translate(...tmp_joint.offset), mat(value), scale(...tmp_joint.scale), tmp);
           }
 
-          jac[i][index*3 + 0] = tmp.subset(math.index(0, 3));
-          jac[i][index*3 + 1] = tmp.subset(math.index(1, 3));
-          jac[i][index*3 + 2] = tmp.subset(math.index(2, 3));
+          jac[i][index*3 + 0] = tmp._data[0][3];
+          jac[i][index*3 + 1] = tmp._data[1][3];
+          jac[i][index*3 + 2] = tmp._data[2][3];
           
       }
       // 向き拘束
       else if(constrain.type === ConstrainType.Orientation ||
               constrain.type === ConstrainType.OrientationBound){
         const mat = getEffectorWorldMatrix(joints, i)
-        const axis = getTranslate(mul(mat, math.matrix([...axisToVec(joint.axis),0]))).slice(0,3);
+        const axis = normalize(matrixToArray3(mul(mat, math.matrix([...axisToVec(joint.axis),0]))));
 
         // 回転ジョイント
         if(joint.type === JointType.Revolution) {
@@ -461,8 +467,8 @@ export function computeJacobian2(joints, values, constrains) {
     for(let i = constrain.joint; i != -1; i = joints[i].parentIndex){
       const joint = joints[i];
 
-      const mat = cancelScaling(getEffectorWorldMatrix(joints, i));
-      const axis = getTranslate(mul(mat, math.matrix([...axisToVec(joint.axis),0]))).slice(0,3);
+      const mat = getEffectorWorldMatrix(joints, i);
+      const axis = normalize(matrixToArray3(mul(mat, math.matrix([...axisToVec(joint.axis),0]))));
 
       // 位置拘束
       if(constrain.type === ConstrainType.Position){
@@ -470,7 +476,7 @@ export function computeJacobian2(joints, values, constrains) {
         if(joint.type === JointType.Revolution) {
           const currentPos = getEffectorWorldPosition(joints, i)
           const diff = math.subtract(effectorPos, currentPos)
-          const cross = math.cross(axis, diff).toArray()
+          const cross = math.cross(axis, diff)
     
           jac[i][index*3 + 0] = cross[0];
           jac[i][index*3 + 1] = cross[1];
@@ -552,7 +558,7 @@ export function calcJacobianTask(joints, _values, _diffs, _constrains) {
     // ヤコビアンの計算
     const jac = computeJacobian2(joints, values, constrains)
     // ヤコビアンの擬似逆行列
-    const jacPI = computePseudoInverse(jac)
+    const jacPI = computeSRInverse(jac)
     // 目標エフェクタ変位×加重擬似逆行列
     // Δq = Δp * J^+
     const dq0 = mul(math.flatten(diffs), jacPI).toArray();    
