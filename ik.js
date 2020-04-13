@@ -12,6 +12,7 @@ export const ConstrainType = {
 export const JointType = {
   Revolution: 0,
   Slide: 1,
+  Static: 2,
 };
 
 
@@ -336,7 +337,8 @@ export function getBoneLocalMatrix(joints, bone) {
         tmp,
         translate(...joint.offset),
         joint.type === JointType.Revolution ? rotAxis(joint.axis, joint.value) :
-        joint.type === JointType.Slide ? translateAxis(joint.axis, joint.value) : 1,
+        joint.type === JointType.Slide ? translateAxis(joint.axis, joint.value) :
+        joint.type === JointType.Static ? rotXYZ(...joint.rotation) : 1,
         scale(...joint.scale));
     });
 
@@ -365,7 +367,8 @@ export function getEffectorWorldMatrix(joints, i) {
     const local = mul(
       translate(...joint.offset),
       joint.type === JointType.Revolution ? rotAxis(joint.axis, joint.value) :
-      joint.type === JointType.Slide ? translateAxis(joint.axis, joint.value) : 1,
+      joint.type === JointType.Slide ? translateAxis(joint.axis, joint.value) : 
+      joint.type === JointType.Static ? rotXYZ(...joint.rotation) : 1,
       scale(...joint.scale));
 
     joint.world = mul(getWorldMatrixRecursive(joint.parentIndex), local);
@@ -491,7 +494,7 @@ export function computeJacobian2(joints, values, constrains) {
           jac[i][index*3 + 2] = cross[2];
         }
         // スライダジョイント
-        else {
+        else if(joint.type === JointType.Slide) {
           jac[i][index*3 + 0] = axis[0];
           jac[i][index*3 + 1] = axis[1];
           jac[i][index*3 + 2] = axis[2];

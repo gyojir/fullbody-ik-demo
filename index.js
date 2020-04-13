@@ -101,21 +101,26 @@ function convertBonesToJoints(bones){
   const joints = [];
   const indices = [];
   bones.forEach((bone,i)=>{
-    let parent = (()=> { let j = 0; return ()=> j++ === 0 ? indices[bone.parentIndex] || -1 : joints.length - 1; })();
+    let parent = (()=> { let j = 0; return ()=> j++ === 0 && indices[bone.parentIndex] !== undefined ? indices[bone.parentIndex] : joints.length - 1; })();
 
-    // value = 関節変位 q
-    // スライダジョイントを挿入
-    if(bone.slide){
-      joints.push({ boneIndex: i, type: JointType.Slide, axis: 0, value: bone.offset[0], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
-      joints.push({ boneIndex: i, type: JointType.Slide, axis: 1, value: bone.offset[1], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
-      joints.push({ boneIndex: i, type: JointType.Slide, axis: 2, value: bone.offset[2], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
+    if(bone.static) {
+      joints.push({ boneIndex: i, type: JointType.Static, axis: 0, value: 0, offset: bone.offset, scale: bone.scale, rotation: bone.rotation, parentIndex: parent(), dirty: true, world: math.identity(4) });      
     }
-
-    // XYZ回転
-    let offset = bone.slide ? [0,0,0] : bone.offset;
-    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 0, value: bone.rotation[0], offset: offset, scale: [1,1,1], angle_range: [0, 180], parentIndex: parent(), dirty: true, world: math.identity(4) });
-    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 1, value: bone.rotation[1], offset: [0,0,0], scale: [1,1,1], angle_range: [0, 180], parentIndex: parent(), dirty: true, world: math.identity(4) });
-    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 2, value: bone.rotation[2], offset: [0,0,0], scale: bone.scale, angle_range: [0, 180], parentIndex: parent(), dirty: true, world: math.identity(4) });
+    else {
+      // value = 関節変位 q
+      // スライダジョイントを挿入
+      if(bone.slide){
+        joints.push({ boneIndex: i, type: JointType.Slide, axis: 0, value: bone.offset[0], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
+        joints.push({ boneIndex: i, type: JointType.Slide, axis: 1, value: bone.offset[1], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
+        joints.push({ boneIndex: i, type: JointType.Slide, axis: 2, value: bone.offset[2], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
+      }
+  
+      // XYZ回転
+      let offset = bone.slide ? [0,0,0] : bone.offset;
+      joints.push({ boneIndex: i, type: JointType.Revolution, axis: 0, value: bone.rotation[0], offset: offset, scale: [1,1,1],  parentIndex: parent(), dirty: true, world: math.identity(4) });
+      joints.push({ boneIndex: i, type: JointType.Revolution, axis: 1, value: bone.rotation[1], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
+      joints.push({ boneIndex: i, type: JointType.Revolution, axis: 2, value: bone.rotation[2], offset: [0,0,0], scale: bone.scale, parentIndex: parent(), dirty: true, world: math.identity(4) });
+    }
     indices[i] = joints.length - 1;
   });
   return joints;
@@ -123,10 +128,11 @@ function convertBonesToJoints(bones){
 
 function convertJointsToBones(joints, bones){
   joints.forEach((joint,i)=>{
-    if(joint.type === JointType.Slide){
-      bones[joint.boneIndex].offset[joint.axis] = joint.value;
-    }else{
+    if(joint.type === JointType.Revolution){
       bones[joint.boneIndex].rotation[joint.axis] = joint.value;
+    }
+    else if(joint.type === JointType.Slide){
+      bones[joint.boneIndex].offset[joint.axis] = joint.value;
     }
   });
 }
@@ -375,6 +381,7 @@ function init_three() {
         model_bones.push(bone);    
       }
     });
+    model_bones[0].static = true;
     // model_bones[0].slide = true;
 
     skeleton = new THREE.SkeletonHelper( model );
