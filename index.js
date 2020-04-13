@@ -241,11 +241,6 @@ function draw_imgui(delta) {
     
     // ik計算しやすい形に変換
     const joints = convertBonesToJoints(model_bones);
-    const converted_constrains = model_constrains.map(e=> ({
-      ...e,
-      joint: convertBoneToJointIndex(joints, e.bone)
-    }));
-
     
     // 回転ジョイントに関しては、参照ポーズとの差分に対して解を求める。
     // Δθref = θref - θ
@@ -277,6 +272,15 @@ function draw_imgui(delta) {
     //   return 0;
     // });
 
+    const converted_constrains = [
+      ...model_constrains.map(e=> ({
+        ...e,
+        joint: convertBoneToJointIndex(joints, e.bone)
+      })),
+      // ...ref_diff.map((e,i)=> ({priority: 0, joint: i, value: e, type: ConstrainType.RefPose}))
+    ];
+
+    
     solve_jacobian_ik(joints, converted_constrains, ref_diff, 1, 0.1);
     convertJointsToBones(joints, model_bones);
 

@@ -654,16 +654,11 @@ export function solve_jacobian_ik(joints, constrains, ref_diff, max_iteration = 
   let values = math.clone(best_values);
   const before_values = math.clone(best_values);
 
-  const new_constrains = [
-    ...constrains,
-    ...ref_diff.map((e,i)=> ({priority: 0, joint: i, value: e, type: ConstrainType.RefPose}))  
-  ]
-
   for (let i of range(max_iteration)) {    
     
     // 目標位置と現在エフェクタ位置の差分の計算
     const enables = [];
-    let diffs = new_constrains.map((e,i) => {
+    let diffs = constrains.map((e,i) => {
       enables[i] = true;
 
       // 位置拘束は単純に差分
@@ -723,7 +718,7 @@ export function solve_jacobian_ik(joints, constrains, ref_diff, max_iteration = 
     // 目標エフェクタ変位にしたがって関節角度ベクトルを更新
     // Δθ = Δp * J^+
     // θ <- θ + Δθ
-    values = calcJacobianTask(joints, values, diffs.filter((e,i)=>enables[i]), new_constrains.filter((e,i)=>enables[i]), current_diff_diff.map(e=> e * step * 2));
+    values = calcJacobianTask(joints, values, diffs.filter((e,i)=>enables[i]), constrains.filter((e,i)=>enables[i]), current_diff_diff.map(e=> e * step * 2));
 
     setJointValues(joints, values);
   }
