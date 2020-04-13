@@ -5,14 +5,15 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 // import Stats from 'three/examples/jsm/libs/stats.module.js';
 import * as math from "mathjs";
 import * as ImGui_Impl from "imgui-js/dist/imgui_impl.umd";
-import { mul, solve_jacobian_ik, getEffectorWorldPosition, getEffectorOrientation, ConstrainType, JointType, getEffectorWorldMatrix, rotXYZ, getRotationXYZ } from './ik';
-import { range, zip } from "./util";
+import * as ik from './ik';
+import { mul, solve_jacobian_ik, getEffectorWorldPosition, getEffectorOrientation, ConstrainType, JointType, getEffectorWorldMatrix, rotXYZ, getRotationXYZ, getRotationError, getRotationFromAxis, normalize } from './ik';
+import { range, zip, rotClamp } from "./util";
 import modelfile from './models/Soldier.glb';
 
 const ImGui = ImGui_Impl.ImGui;
 
 let camera, scene, renderer;
-let model, skeleton, mixer;
+let model, animation_compute_model, skeleton, mixer;
 var actions;
 let clock;
 
@@ -22,7 +23,7 @@ let model_bones = [];
 
 const model_constrains = [
   {priority: 1, bone: 33, joint: -1, pos: [0.5,1,0], object: null, type: ConstrainType.Position},
-  {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: null, type: ConstrainType.Position},
+  // {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: null, type: ConstrainType.Position},
 ];
 
 const constrains = [
@@ -150,7 +151,7 @@ export function SliderAngleFloat3(label, v_rad, v_degrees_min = -360.0, v_degree
   return ret;
 }
 
-function draw_imgui() {   
+function draw_imgui(delta) {   
 
   /*
   {
@@ -245,11 +246,42 @@ function draw_imgui() {
       joint: convertBoneToJointIndex(joints, e.bone)
     }));
 
-    solve_jacobian_ik(joints, converted_constrains, 20, 0.5);
+    
+    // 回転ジョイントに関しては、参照ポーズとの差分に対して解を求める。
+    // Δθref = θref - θ
+    // スケルトンアニメーション
+    ImGui.SliderFloat(`timeScale`,  (scale = mixer.timeScale) => mixer.timeScale = scale, 0, 2);
+    mixer.update(delta);
+    const bone_anim = model_bones.map(bone => convertVector3ToArray(bone.animation_object.rotation));
+    const anim_diff = joints.map(joint=>{
+      if( joint.type === JointType.Revolution ) {
+        return bone_anim[joint.boneIndex][joint.axis];
+      }
+      return 0;
+    });
+    const ref_diff = joints.map((joint,i)=>{
+      if( joint.type === JointType.Revolution ) {
+        return rotClamp(anim_diff[i] - joint.value);
+      }
+      return 0;
+    });
+    // const anim_diff = joints.map(joint=>
+    //   joint.type === JointType.Revolution ? rotClamp(bone_anim_diff[joint.boneIndex][joint.axis]) * 0.1 : 0);
+
+    // const anim_diff = joints.map(joint=>{
+    //   if( joint.type === JointType.Revolution ) {
+    //     const diff =  rotClamp(bone_anim[joint.boneIndex][joint.axis]);
+    //     // joint.value +=  diff;
+    //     return diff;
+    //   }
+    //   return 0;
+    // });
+
+    solve_jacobian_ik(joints, converted_constrains, ref_diff, 1, 0.1);
     convertJointsToBones(joints, model_bones);
 
     // デバッグ表示
-    if (ImGui.TreeNode("transform##1"))
+    if (ImGui.TreeNode("bones##1"))
     {
       model_bones.forEach((e,i)=>{
         ImGui.SliderFloat3(`pos[${i}] ${e.object.name}`, e.offset, -5, 5)
@@ -388,7 +420,14 @@ function init_three() {
     skeleton.visible = true;
     scene.add( skeleton );
 
-    mixer = new THREE.AnimationMixer( model );
+
+    animation_compute_model = model.clone(true);
+
+    model_bones.forEach(bone=>{
+      bone.animation_object = animation_compute_model.getObjectByName(bone.object.name);
+    });
+
+    mixer = new THREE.AnimationMixer(animation_compute_model);
     var animations = gltf.animations;
     actions = animations.map(anim=> mixer.clipAction(anim));
 
@@ -435,12 +474,7 @@ function animate(time) {
   ImGui_Impl.NewFrame(time);
   ImGui.NewFrame();
 
-  // スケルトンアニメーション
-  if(mixer){
-    mixer.update( delta );
-  }
-
-  draw_imgui();
+  draw_imgui(delta);
 
   //
   renderer.render(scene, camera);

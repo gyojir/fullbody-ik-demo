@@ -20,3 +20,15 @@ test('world matrix', ()=>{
     expect(ik.getScale(ik.mul(ik.rotX(1), ik.scale(2,2,2)))).toBeDeepCloseTo([2,2,2], 3);
     expect(ik.getRotationXYZ(ik.mul(ik.rotX(Math.PI/4), ik.rotY(Math.PI/5),ik.rotZ(Math.PI/6),ik.scale(2,2,2)))).toBeDeepCloseTo([Math.PI/4,Math.PI/5,Math.PI/6], 3);
 })
+test('getRotationError', ()=>{
+    const a = [Math.PI/4, Math.PI/5, Math.PI/6];
+    const b = [Math.PI/6, Math.PI/5, Math.PI/2];
+    const A = ik.mul(ik.rotXYZ(...a));
+    const B = ik.mul(ik.rotXYZ(...b));
+    const diff = ik.mul(math.transpose(B), A);
+    const e = ik.getRotationError(A, B);
+    const rot = ik.getRotationFromAxis(ik.normalize(e), Math.asin(math.norm(e)) * 2);
+    console.log(A.toArray());
+    console.log(b, e);
+    console.log(ik.rotXYZ(...math.add(b, e)).toArray());
+});
