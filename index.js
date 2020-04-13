@@ -106,16 +106,16 @@ function convertBonesToJoints(bones){
     // value = 関節変位 q
     // スライダジョイントを挿入
     if(bone.slide){
-      joints.push({ boneIndex: i, type: JointType.Slide, axis: 0, value: bone.offset[0], offset: [0,0,0], scale: [1,1,1], parentIndex: parent() });
-      joints.push({ boneIndex: i, type: JointType.Slide, axis: 1, value: bone.offset[1], offset: [0,0,0], scale: [1,1,1], parentIndex: parent() });
-      joints.push({ boneIndex: i, type: JointType.Slide, axis: 2, value: bone.offset[2], offset: [0,0,0], scale: [1,1,1], parentIndex: parent() });
+      joints.push({ boneIndex: i, type: JointType.Slide, axis: 0, value: bone.offset[0], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
+      joints.push({ boneIndex: i, type: JointType.Slide, axis: 1, value: bone.offset[1], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
+      joints.push({ boneIndex: i, type: JointType.Slide, axis: 2, value: bone.offset[2], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
     }
 
     // XYZ回転
     let offset = bone.slide ? [0,0,0] : bone.offset;
-    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 0, value: bone.rotation[0], offset: offset, scale: [1,1,1], angle_range: [0, 180], parentIndex: parent() });
-    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 1, value: bone.rotation[1], offset: [0,0,0], scale: [1,1,1], angle_range: [0, 180], parentIndex: parent() });
-    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 2, value: bone.rotation[2], offset: [0,0,0], scale: bone.scale, angle_range: [0, 180], parentIndex: parent() });
+    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 0, value: bone.rotation[0], offset: offset, scale: [1,1,1], angle_range: [0, 180], parentIndex: parent(), dirty: true, world: math.identity(4) });
+    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 1, value: bone.rotation[1], offset: [0,0,0], scale: [1,1,1], angle_range: [0, 180], parentIndex: parent(), dirty: true, world: math.identity(4) });
+    joints.push({ boneIndex: i, type: JointType.Revolution, axis: 2, value: bone.rotation[2], offset: [0,0,0], scale: bone.scale, angle_range: [0, 180], parentIndex: parent(), dirty: true, world: math.identity(4) });
     indices[i] = joints.length - 1;
   });
   return joints;
@@ -239,14 +239,22 @@ function draw_imgui() {
       joint: convertBoneToJointIndex(joints, e.bone)
     }));
 
-    solve_jacobian_ik(joints, converted_constrains, 10, 0.5);
+    solve_jacobian_ik(joints, converted_constrains, 20, 0.5);
     convertJointsToBones(joints, model_bones);
+
+    // デバッグ表示
+    if (ImGui.TreeNode("transform##1"))
+    {
+      model_bones.forEach((e,i)=>{
+        ImGui.SliderFloat3(`pos[${i}] ${e.object.name}`, e.offset, -5, 5)
+        SliderAngleFloat3(`rot[${i}] ${e.object.name}`, e.rotation, -180, 180)
+        ImGui.SliderFloat3(`scale[${i}] ${e.object.name}`, e.scale, 0.001, 1)
+      });
+    }
+    ImGui.Separator();
 
     // bones->model
     model_bones.forEach((e,i)=>{
-      ImGui.SliderFloat3(`pos[${i}] ${e.object.name}`, e.offset, -100, 100)
-      SliderAngleFloat3(`rot[${i}] ${e.object.name}`, e.rotation, -100, 100)
-      ImGui.SliderFloat3(`scale[${i}] ${e.object.name}`, e.scale, 0.001, 1)
       e.object.position.set(...e.offset);
       e.object.rotation.set(...e.rotation);
       e.object.scale.set(...e.scale);
@@ -355,7 +363,6 @@ function init_three() {
       if(object.isBone ||
          (object.parent && object.parent.isBone)  ||
          object.children.reduce((prev, curr) => prev || curr.isBone, false)){
-        console.log(object.scale);
         const bone = {
           id: object.id,
           name: object.name,

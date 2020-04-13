@@ -332,13 +332,12 @@ export function getBoneLocalMatrix(joints, bone) {
     .filter(joint=> joint.boneIndex === bone)
     .forEach(joint=>{
       // parent * T * R * S
-      tmp = mul(tmp, translate(...joint.offset));
-  　　if(joint.type === JointType.Revolution){  
-        tmp = mul(tmp, rotAxis(joint.axis, joint.value));
-      }else{
-        tmp = mul(tmp, translateAxis(joint.axis, joint.value));
-      }
-      tmp = mul(tmp, scale(...joint.scale));
+      tmp = mul(
+        tmp,
+        translate(...joint.offset),
+        joint.type === JointType.Revolution ? rotAxis(joint.axis, joint.value) :
+        joint.type === JointType.Slide ? translateAxis(joint.axis, joint.value) : 1,
+        scale(...joint.scale));
     });
 
   return tmp
@@ -346,27 +345,35 @@ export function getBoneLocalMatrix(joints, bone) {
 
 // エフェクタの姿勢行列取得
 export function getEffectorWorldMatrix(joints, i) {
-  let tmp = math.identity(4)
-
   if(i == -1){
     i = joints.length - 1;
   }
-
-  while (i != -1) {
-    const joint = joints[i];
-    
-    // T * R * S *child
-    tmp = mul(scale(...joint.scale), tmp);
-　　if(joint.type === JointType.Revolution){  
-      tmp = mul(rotAxis(joint.axis, joint.value), tmp);
-    }else{
-      tmp = mul(translateAxis(joint.axis, joint.value), tmp);
+  
+  const getWorldMatrixRecursive = (index) => {
+    if(index < 0){
+      return math.identity(4);
     }
-    tmp = mul(translate(...joint.offset), tmp);
+    
+    const joint = joints[index];
 
-    i = joint.parentIndex;
+    // 計算済み
+    if(!joint.dirty){
+      return joint.world;      
+    }
+    
+    // parent * T * R * S
+    const local = mul(
+      translate(...joint.offset),
+      joint.type === JointType.Revolution ? rotAxis(joint.axis, joint.value) :
+      joint.type === JointType.Slide ? translateAxis(joint.axis, joint.value) : 1,
+      scale(...joint.scale));
+
+    joint.world = mul(getWorldMatrixRecursive(joint.parentIndex), local);
+    joint.dirty = false;
+    return joint.world;
   }
-  return tmp
+
+  return getWorldMatrixRecursive(i);
 }
 
 // エフェクタの位置取得
@@ -390,7 +397,8 @@ export function getEffectorOrientation(joints, i) {
 // ジョイントのパラメータ適用
 export function setJointValues(joints, values) {
   for (let [joint, value] of zip(joints, values)) {
-    joint.value = value
+    joint.value = value;
+    joint.dirty = true;
   }
 }
 
