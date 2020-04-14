@@ -54,7 +54,7 @@ export const JointType = {
   Static: 2,
 };
 
-// エフェクタの姿勢行列取得
+// ジョイントの姿勢行列取得
 export function getBoneLocalMatrix(joints, bone) {
   let tmp = math.identity(4)
 
@@ -79,8 +79,8 @@ export function getBoneLocalMatrix(joints, bone) {
   return tmp
 }
 
-// エフェクタの姿勢行列取得
-export function getEffectorWorldMatrix(joints, i) {
+// ジョイントの姿勢行列取得
+export function getJointWorldMatrix(joints, i) {
   if(i == -1){
     i = joints.length - 1;
   }
@@ -113,21 +113,21 @@ export function getEffectorWorldMatrix(joints, i) {
   return getWorldMatrixRecursive(i);
 }
 
-// エフェクタの位置取得
-export function getEffectorWorldPosition(joints, i) {
+// ジョイントの位置取得
+export function getJointWorldPosition(joints, i) {
   // 先端の座標系から根元の座標系に変換
   // Max0 * Max1 * Mat2 * Mat3 * [0,0,0,1]
 
-  const tmp = getEffectorWorldMatrix(joints, i)
+  const tmp = getJointWorldMatrix(joints, i)
   return [tmp._data[0][3], tmp._data[1][3], tmp._data[2][3]];
 }
 
-// エフェクタの方向取得
-export function getEffectorOrientation(joints, i) {
+// ジョイントの方向取得
+export function getJointOrientation(joints, i) {
   // 先端の座標系から根元の座標系に変換
   // Max0 * Max1 * Mat2 * Mat3 * [0,0,0,1]
 
-  const tmp = getEffectorWorldMatrix(joints, i)
+  const tmp = getJointWorldMatrix(joints, i)
   return getRotationXYZ(tmp);
 }
 
@@ -147,7 +147,7 @@ export function computeJacobian(joints, values, constrains) {
   // 各拘束に対してヤコビアンを求める
   constrains.forEach((constrain, index) => {
 
-    // 拘束対象エフェクタに対する 先端からルートまでの各ジョイント に関する偏微分を求める
+    // 拘束対象ジョイントに対する 先端からルートまでの各ジョイント に関する偏微分を求める
     for(let i = constrain.joint; i != -1; i = joints[i].parentIndex){
       const joint = joints[i];
 
@@ -181,7 +181,7 @@ export function computeJacobian(joints, values, constrains) {
       // 向き拘束
       else if(constrain.type === ConstrainType.Orientation ||
               constrain.type === ConstrainType.OrientationBound){
-        const mat = getEffectorWorldMatrix(joints, i)
+        const mat = getJointWorldMatrix(joints, i)
         const axis = normalize(matrixToArray3(mul(mat, math.matrix([...axisToVec(joint.axis),0]))));
 
         // 回転ジョイント
@@ -205,23 +205,23 @@ export function computeJacobian2(joints, values, constrains) {
   let offset = 0;
   // 各拘束に対してヤコビアンを求める
   constrains.forEach((constrain, index) => {
-    // 拘束対象エフェクタの位置の取得
-    const effectorPos = getEffectorWorldPosition(joints, constrain.joint);
+    // 拘束対象ジョイントの位置の取得
+    const jointPos = getJointWorldPosition(joints, constrain.joint);
 
-    // 拘束対象エフェクタに対する 先端からルートまでの各ジョイント に関する偏微分を求める
+    // 拘束対象ジョイントに対する 先端からルートまでの各ジョイント に関する偏微分を求める
     // => 現在のリンクから先端までのベクトルの回転を考える。（速度ヤコビアン）
     for(let i = constrain.joint; i != -1; i = joints[i].parentIndex){
       const joint = joints[i];
 
-      const mat = getEffectorWorldMatrix(joints, i);
+      const mat = getJointWorldMatrix(joints, i);
       const axis = normalize(matrixToArray3(mul(mat, math.matrix([...axisToVec(joint.axis),0]))));
 
       // 位置拘束
       if(constrain.type === ConstrainType.Position){
         // 回転ジョイント
         if(joint.type === JointType.Revolution) {
-          const currentPos = getEffectorWorldPosition(joints, i)
-          const diff = math.subtract(effectorPos, currentPos)
+          const currentPos = getJointWorldPosition(joints, i)
+          const diff = math.subtract(jointPos, currentPos)
           const cross = math.cross(axis, diff)
     
           jac[i][offset + 0] = cross[0];
@@ -314,7 +314,7 @@ export function calcJacobianTask(joints, _values, _diffs, _constrains, diff_ref)
     const jac = computeJacobian2(joints, values, constrains)
     // ヤコビアンの擬似逆行列
     const jacPI = computeSRInverse(jac)
-    // 目標エフェクタ変位×擬似逆行列
+    // 目標ジョイント変位×擬似逆行列
     // Δq = Δp * J^+
     // Δθ_diff = (Δp - Δθref*J) * J^+  (バイアス付き最小ノルム解の場合)
     // const dq0 = mul(math.flatten(diffs), jacPI).toArray();
@@ -392,19 +392,19 @@ export function solve_jacobian_ik(joints, constrains, max_iteration = 1, step = 
       joints[i].type === JointType.Revolution ||
       joints[i].type === JointType.Slide ? e - current_diff[i] : 0);
     
-    // 目標位置と現在エフェクタ位置の差分の計算
+    // 目標位置と現在ジョイント位置の差分の計算
     const enables = [];
     let diffs = constrains.map((e,i) => {
       enables[i] = true;
 
       // 位置拘束は単純に差分
       if(e.type === ConstrainType.Position){
-        const p = getEffectorWorldPosition(joints, e.joint);
+        const p = getJointWorldPosition(joints, e.joint);
         return math.subtract(e.pos, p);
       }
       // 向き拘束は回転軸を計算
       else if(e.type === ConstrainType.Orientation){
-        const curr = getEffectorWorldMatrix(joints, e.joint);
+        const curr = getJointWorldMatrix(joints, e.joint);
         const target = rotXYZ(...e.rot);
         const err = getRotationError(target, curr);
         return mul(math.resize(curr,[3,3]),err).toArray();
@@ -416,7 +416,7 @@ export function solve_jacobian_ik(joints, constrains, max_iteration = 1, step = 
         const [ay, az, t, gamma] = getRotationSpherical(curr,target, getSwapMatrix(1,2,0));
         // 範囲を超えた場合のみ戻す
         if(gamma > e.bounds.gamma_max){
-          const world = math.resize(getEffectorWorldMatrix(joints, e.joint),[3,3]);
+          const world = math.resize(getJointWorldMatrix(joints, e.joint),[3,3]);
           const err = getRotationError(target, curr);
           return mul(world, err).toArray();
         }
@@ -443,10 +443,10 @@ export function solve_jacobian_ik(joints, constrains, max_iteration = 1, step = 
       break;
     }
 
-    // 目標エフェクタ変位 = (差分ベクトル / 差分ベクトル長) * step
+    // 目標ジョイント変位 = (差分ベクトル / 差分ベクトル長) * step
     diffs = diffs.map(e => math.multiply(normalize(e), step));
 
-    // 目標エフェクタ変位にしたがって関節角度ベクトルを更新
+    // 目標ジョイント変位にしたがって関節角度ベクトルを更新
     // Δθ = Δp * J^+
     // θ <- θ + Δθ
     values = calcJacobianTask(joints, values, diffs.filter((e,i)=>enables[i]), constrains.filter((e,i)=>enables[i]), current_diff_diff.map(e=> e * step));

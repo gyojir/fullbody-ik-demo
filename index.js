@@ -8,7 +8,7 @@ import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as math from "mathjs";
 import * as ImGui_Impl from "imgui-js/dist/imgui_impl.umd";
 import * as ik from './ik';
-import { getEffectorOrientation, getEffectorWorldMatrix, solve_jacobian_ik, getEffectorWorldPosition, ConstrainType, JointType } from './ik';
+import { getJointOrientation, getJointWorldMatrix, solve_jacobian_ik, getJointWorldPosition, ConstrainType, JointType } from './ik';
 import { mul, rotXYZ, getRotationXYZ }from './math-util';
 import { range, zip, rotWrap } from "./util";
 import modelfile from './models/Soldier.glb';
@@ -299,7 +299,7 @@ function draw_imgui(delta) {
     
     // デバッグ表示
     converted_constrains.forEach((constrain,i) => {
-      const pos = getEffectorWorldPosition(joints, constrain.joint);
+      const pos = getJointWorldPosition(joints, constrain.joint);
 
       if(constrain.type === ConstrainType.Position){
         ImGui.SliderFloat3(`pos constrain[${i}]`, constrain.pos, -2, 2)
@@ -309,7 +309,7 @@ function draw_imgui(delta) {
         }
       }
       else if(constrain.type === ConstrainType.Orientation){
-        const rot = getEffectorOrientation(joints, constrain.joint);
+        const rot = getJointOrientation(joints, constrain.joint);
         SliderAngleFloat3(`rot constrain[${i}]`, constrain.rot, -180, 180)
         SliderAngleFloat3(`effector_rot[${i}]`, rot, -180, 180);
         if(constrain.object){
@@ -319,8 +319,8 @@ function draw_imgui(delta) {
       }
       else if(constrain.type === ConstrainType.OrientationBound){
         const parentBone = bones[constrain.bone].parentIndex;
-        const parent = parentBone != -1 ? getEffectorWorldMatrix(joints, convertBoneToJointIndex(joints,parentBone)) : math.identity(4);
-        const rot = getEffectorOrientation(joints, constrain.joint);
+        const parent = parentBone != -1 ? getJointWorldMatrix(joints, convertBoneToJointIndex(joints,parentBone)) : math.identity(4);
+        const rot = getJointOrientation(joints, constrain.joint);
         SliderAngleFloat3(`rot bound constrain[${i}]`, constrain.base_rot, -180, 180)
         SliderAngleFloat3(`effector_rot[${i}]`, rot, -180, 180);
         if(constrain.object){
