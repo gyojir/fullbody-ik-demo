@@ -579,7 +579,7 @@ export function calcJacobianTask(joints, _values, _diffs, _constrains, diff_ref)
   // 高優先度タスク
   const computeHighPriorityTask = (diffs, constrains) =>{
     if(!diffs.length || !constrains.length){
-      return [math.zeros(joints.length), math.zeros([joints.length,joints.length])];
+      return [math.zeros(joints.length).toArray(), math.zeros([joints.length,joints.length])];
     }
 
     // 加重行列を単位行列で初期化
@@ -703,7 +703,7 @@ export function solve_jacobian_ik(joints, constrains, ref_diff, max_iteration = 
     });
 
     // 差分をまとめる
-    const dist_mean = math.mean(diffs.map(diff => math.norm(diff)));
+    const dist_mean = diffs.length > 0 ? math.mean(diffs.map(diff => math.norm(diff))) : 0;
     const ref_mean = math.mean(current_diff_diff.map(e => Math.abs(e)));
     if (dist_mean < min_dist && ref_mean < min_ref_diff) {
       min_dist = dist_mean;

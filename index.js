@@ -24,9 +24,9 @@ const canvas = document.getElementById("canvas");
 let model_bones = [];
 const model_constrains = [
   {priority: 1, bone: 33, joint: -1, pos: [0.5,1,0], object: null, type: ConstrainType.Position},
-  {priority: 0, bone: 33, joint: -1, rot: [0.5,1,0], object: null, type: ConstrainType.Orientation},
+  // {priority: 0, bone: 33, joint: -1, rot: [0.5,1,0], object: null, type: ConstrainType.Orientation},
   // {priority: 1, bone: 33, joint: -1, rot: [0.5,1,0], object: null, type: ConstrainType.Orientation},
-  {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: null, type: ConstrainType.Position},
+  // {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: null, type: ConstrainType.Position},
 ];
 
 const constrains = [
