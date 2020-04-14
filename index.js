@@ -18,23 +18,20 @@ let model, animation_compute_model, skeleton, mixer;
 var actions;
 let clock;
 
-var step = 1.0;
-
 const canvas = document.getElementById("canvas");
 
 let model_bones = [];
-
 const model_constrains = [
   {priority: 1, bone: 33, joint: -1, pos: [0.5,1,0], object: null, type: ConstrainType.Position},
   // {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: null, type: ConstrainType.Position},
 ];
 
 const constrains = [
-  {priority: 1, bone: 2, joint: -1, pos: [1,1,0], object: null, type: ConstrainType.Position},
-  {priority: 0, bone: 2, joint: -1, rot: [1,0,0], object: null, type: ConstrainType.Orientation},
-  {priority: 0, bone: 2, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: null, type: ConstrainType.OrientationBound},
-  {priority: 0, bone: 0, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: null, type: ConstrainType.OrientationBound},
-  {priority: 0, bone: 4, joint: -1, pos: [-1,1,0], object: null, type: ConstrainType.Position}
+  // {priority: 1, bone: 2, joint: -1, pos: [1,1,0], object: null, type: ConstrainType.Position},
+  // {priority: 0, bone: 2, joint: -1, rot: [1,0,0], object: null, type: ConstrainType.Orientation},
+  // {priority: 0, bone: 2, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: null, type: ConstrainType.OrientationBound},
+  // {priority: 0, bone: 0, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: null, type: ConstrainType.OrientationBound},
+  // {priority: 0, bone: 4, joint: -1, pos: [-1,1,0], object: null, type: ConstrainType.Position}
 ];
 
 let bones = [];
@@ -250,11 +247,22 @@ function draw_imgui(delta) {
     // スケルトンアニメーション
     ImGui.SliderFloat(`timeScale`,  (scale = mixer.timeScale) => mixer.timeScale = scale, 0, 5);
     mixer.update(delta);
-    const bone_anim = model_bones.map(bone => convertVector3ToArray(bone.animation_object.rotation));
-    const anim_diff = joints.map(joint=>
-      joint.type === JointType.Revolution ? bone_anim[joint.boneIndex][joint.axis] : 0);
-    const ref_diff = joints.map((joint,i)=>
-      joint.type === JointType.Revolution ? rotWrap(anim_diff[i] - joint.value) : 0);
+    const ref_diff = joints.map((joint,i)=> {
+      const bone = model_bones[joint.boneIndex];
+      const obj = bone.animation_object;
+      const pos = convertVector3ToArray(obj.position);
+      const rot = convertVector3ToArray(obj.rotation);
+      return (
+        joint.type === JointType.Revolution ? (
+          !bone.slide && joint.axis === 0 && (bone.offset = joint.offset = pos),
+          rotWrap(rot[joint.axis] - joint.value)) : // 角度は近道で移動
+        joint.type === JointType.Slide ? (
+          pos[joint.axis] - joint.value) :          // 差分
+        joint.type === JointType.Static ? (
+          bone.offset = joint.offset = pos,
+          bone.rotation = joint.rotation =  rot,
+          0 ) : 0)
+    });
 
     const converted_constrains = [
       ...model_constrains.map(e=> ({
@@ -432,6 +440,7 @@ function init_three() {
   // -----------------------------------------
   // 組み立て
   // -----------------------------------------
+  /*
   const build = (tree, parent)=>{
     const height = tree.children.length > 0 ? 1 : 0.2;
     const geometry = new THREE.CylinderGeometry( 0, 0.05, height);
@@ -452,6 +461,7 @@ function init_three() {
   const group = new THREE.Group();
   build(root, {object: group, index: -1});
   scene.add(group);
+  */
 }
 
 function onWindowResize() {

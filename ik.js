@@ -625,7 +625,6 @@ export function calcJacobianTask(joints, _values, _diffs, _constrains, diff_ref)
 
   // 回転ジョイントはバイアス付き解なので戻す
   // Δθ = Δθ_diff + Δθ_ref
-
   values = add(values, dq, diff_ref);
 
   // // 冗長変数etaを使って可動範囲を超えた場合に元に戻すように角変位を与える
@@ -663,7 +662,9 @@ export function solve_jacobian_ik(joints, constrains, ref_diff, max_iteration = 
     // 現在の関節速度
     const current_diff = ref_diff.map((e,i) => joints[i].value - before_values[i]);
     // 現在の関節速度と目標の関節速度の差分
-    const current_diff_diff = ref_diff.map((e,i)=> joints[i].type === JointType.Revolution ? e - current_diff[i] : 0);
+    const current_diff_diff = ref_diff.map((e,i) =>
+      joints[i].type === JointType.Revolution ||
+      joints[i].type === JointType.Slide ? e - current_diff[i] : 0);
     
     // 目標位置と現在エフェクタ位置の差分の計算
     const enables = [];
@@ -703,7 +704,7 @@ export function solve_jacobian_ik(joints, constrains, ref_diff, max_iteration = 
 
     // 差分をまとめる
     const dist_mean = math.mean(diffs.map(diff => math.norm(diff)));
-    const ref_mean = math.mean(current_diff_diff.filter((e,i)=>joints[i].type === JointType.Revolution).map(e => Math.abs(e)));
+    const ref_mean = math.mean(current_diff_diff.map(e => Math.abs(e)));
     if (dist_mean < min_dist && ref_mean < min_ref_diff) {
       min_dist = dist_mean;
       min_ref_diff = ref_mean;
