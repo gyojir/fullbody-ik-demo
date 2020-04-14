@@ -8,8 +8,9 @@ import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as math from "mathjs";
 import * as ImGui_Impl from "imgui-js/dist/imgui_impl.umd";
 import * as ik from './ik';
-import { mul, solve_jacobian_ik, getEffectorWorldPosition, getEffectorOrientation, ConstrainType, JointType, getEffectorWorldMatrix, rotXYZ, getRotationXYZ, getRotationError, getRotationFromAxis, normalize } from './ik';
-import { range, zip, rotWrap as rotWrap } from "./util";
+import { getEffectorOrientation, getEffectorWorldMatrix, solve_jacobian_ik, getEffectorWorldPosition, ConstrainType, JointType } from './ik';
+import { mul, rotXYZ, getRotationXYZ }from './math-util';
+import { range, zip, rotWrap } from "./util";
 import modelfile from './models/Soldier.glb';
 
 const ImGui = ImGui_Impl.ImGui;
@@ -275,7 +276,7 @@ function draw_imgui(delta) {
       // ...ref_diff.map((e,i)=> ({priority: 0, joint: i, value: e, type: ConstrainType.RefPose})).filter((e,i)=>i<30)
     ];
 
-    solve_jacobian_ik(joints, converted_constrains, ref_diff, 10 , 0.1);
+    solve_jacobian_ik(joints, converted_constrains, 10 , 0.1, ref_diff);
     convertJointsToBones(joints, model_bones);
 
     // デバッグ表示
@@ -411,12 +412,17 @@ function init_three() {
     scene.add(control);
   })
 
-  
+  // モデルロード
   var loader = new GLTFLoader();
   loader.load(modelfile, function ( gltf ) {
     model = gltf.scene;
     scene.add( model );
 
+    skeleton = new THREE.SkeletonHelper( model );
+    skeleton.visible = true;
+    scene.add( skeleton );
+
+    // ボーンを摘出
     model.traverse( function ( object ) {      
       if(object.isBone ||
          (object.parent && object.parent.isBone)  ||
@@ -436,22 +442,20 @@ function init_three() {
     model_bones[0].static = true;
     // model_bones[0].slide = true;
 
-    skeleton = new THREE.SkeletonHelper( model );
-    skeleton.visible = true;
-    scene.add( skeleton );
-
+    // アニメーション用ダミーモデル
     animation_compute_model = SkeletonUtils.clone(model);
     animation_compute_model.visible = false;
+
     scene.add( animation_compute_model );
     let skeleton_2 = new THREE.SkeletonHelper( animation_compute_model );
     skeleton_2.visible = true;
     scene.add( skeleton_2 );
 
-
     model_bones.forEach(bone=>{
       bone.animation_object = animation_compute_model.getObjectByName(bone.object.name);
     });
 
+    // アニメーション
     mixer = new THREE.AnimationMixer(animation_compute_model);
     var animations = gltf.animations;
     actions = animations.map(anim=> mixer.clipAction(anim));
