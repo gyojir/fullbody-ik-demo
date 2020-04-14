@@ -397,6 +397,11 @@ export function solve_jacobian_ik(joints, constrains, max_iteration = 1, step = 
     let diffs = constrains.map((e,i) => {
       enables[i] = true;
 
+      if(!e.enable) {
+        enables[i] = false;
+        return [0,0,0];
+      }
+
       // 位置拘束は単純に差分
       if(e.type === ConstrainType.Position){
         const p = getJointWorldPosition(joints, e.joint);

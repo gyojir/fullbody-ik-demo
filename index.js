@@ -24,18 +24,17 @@ const canvas = document.getElementById("canvas");
 
 let model_bones = [];
 const model_constrains = [
-  {priority: 1, bone: 33, joint: -1, pos: [0.5,1,0], object: null, type: ConstrainType.Position},
-  // {priority: 0, bone: 33, joint: -1, rot: [0.5,1,0], object: null, type: ConstrainType.Orientation},
-  // {priority: 1, bone: 33, joint: -1, rot: [0.5,1,0], object: null, type: ConstrainType.Orientation},
-  // {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: null, type: ConstrainType.Position},
+  {priority: 1, bone: 33, joint: -1, pos: [0.5,1,0], object: null, type: ConstrainType.Position, enable: true},
+  {priority: 0, bone: 33, joint: -1, rot: [0.5,1,0], object: null, type: ConstrainType.Orientation, enable: true},
+  {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: null, type: ConstrainType.Position, enable: true},
 ];
 
 const constrains = [
-  // {priority: 1, bone: 2, joint: -1, pos: [1,1,0], object: null, type: ConstrainType.Position},
-  // {priority: 0, bone: 2, joint: -1, rot: [1,0,0], object: null, type: ConstrainType.Orientation},
-  // {priority: 0, bone: 2, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: null, type: ConstrainType.OrientationBound},
-  // {priority: 0, bone: 0, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: null, type: ConstrainType.OrientationBound},
-  // {priority: 0, bone: 4, joint: -1, pos: [-1,1,0], object: null, type: ConstrainType.Position}
+  // {priority: 1, bone: 2, joint: -1, pos: [1,1,0], object: null, type: ConstrainType.Position, enable: true},
+  // {priority: 0, bone: 2, joint: -1, rot: [1,0,0], object: null, type: ConstrainType.Orientation, enable: true},
+  // {priority: 0, bone: 2, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: null, type: ConstrainType.OrientationBound, enable: true},
+  // {priority: 0, bone: 0, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: null, type: ConstrainType.OrientationBound, enable: true},
+  // {priority: 0, bone: 4, joint: -1, pos: [-1,1,0], object: null, type: ConstrainType.Position, enable: true}
 ];
 
 let bones = [];
@@ -299,7 +298,13 @@ function draw_imgui(delta) {
     
     // デバッグ表示
     converted_constrains.forEach((constrain,i) => {
+      const origin_constrain = model_constrains[i];
       const pos = getJointWorldPosition(joints, constrain.joint);
+
+      if(ImGui.Checkbox(`enable[${i}]`, (value = origin_constrain.enable) => origin_constrain.enable = value)){
+        origin_constrain.object.visible = origin_constrain.enable;
+        origin_constrain.control.enabled = origin_constrain.enable;
+      }
 
       if(constrain.type === ConstrainType.Position){
         ImGui.SliderFloat3(`pos constrain[${i}]`, constrain.pos, -2, 2)
@@ -391,6 +396,7 @@ function init_three() {
     
     // 掴んで移動
     const control = new TransformControls( camera, renderer.domElement );
+    constrain.control = control;
     control.size = 0.3;
     control.setMode(
       constrain.type === ConstrainType.Position ? "translate" :
