@@ -1,7 +1,7 @@
 
 import * as math from "mathjs";
 import * as ml from "ml-matrix";
-import {range, zip, rotClamp} from "./util";
+import {range, zip, rotWrap} from "./util";
 
 export const ConstrainType = {
   Position: 0,
@@ -545,7 +545,7 @@ export function computePseudoInverse(jac) {
 // Singularity-Robust Inverse計算
 export function computeSRInverse(jac) {
   const jacT = math.transpose(jac);
-  const k = 0.9;
+  const k = 0.1;
   // (J^T * J + λI)^-1 * J^T
   return math.multiply(inv(math.add(math.multiply(jacT, jac),  mul(k, math.identity(jac.size()[1])))), jacT);
 }
@@ -591,10 +591,12 @@ export function calcJacobianTask(joints, _values, _diffs, _constrains, diff_ref)
     // 目標エフェクタ変位×擬似逆行列
     // Δq = Δp * J^+
     // Δθ_diff = (Δp - Δθref*J) * J^+  (バイアス付き最小ノルム解の場合)
-    const dq0 = mul(math.flatten(diffs), jacPI).toArray();    
+    // const dq0 = mul(math.flatten(diffs), jacPI).toArray();
+    const dq0 = mul(math.subtract(math.flatten(diffs), mul(diff_ref, jac)), jacPI).toArray();    
     // W = (I-JJ^+) 冗長項
     const w = math.subtract(math.identity(joints.length), mul(jac,jacPI));
 
+    // console.log(math.flatten(diffs), mul(diff_ref, jac).toArray())
     return [dq0, w];
   }
 
@@ -624,7 +626,7 @@ export function calcJacobianTask(joints, _values, _diffs, _constrains, diff_ref)
   // 回転ジョイントはバイアス付き解なので戻す
   // Δθ = Δθ_diff + Δθ_ref
 
-  values = add(values, dq);
+  values = add(values, dq, diff_ref);
 
   // // 冗長変数etaを使って可動範囲を超えた場合に元に戻すように角変位を与える
   // // ↑参考 http://sssiii.seesaa.net/article/383711810.html
@@ -654,7 +656,14 @@ export function solve_jacobian_ik(joints, constrains, ref_diff, max_iteration = 
   let values = math.clone(best_values);
   const before_values = math.clone(best_values);
 
+  // step = 1 / max_iteration;
+
   for (let i of range(max_iteration)) {    
+
+    // 現在の関節速度
+    const current_diff = ref_diff.map((e,i) => joints[i].value - before_values[i]);
+    // 現在の関節速度と目標の関節速度の差分
+    const current_diff_diff = ref_diff.map((e,i)=> joints[i].type === JointType.Revolution ? e - current_diff[i] : 0);
     
     // 目標位置と現在エフェクタ位置の差分の計算
     const enables = [];
@@ -686,16 +695,11 @@ export function solve_jacobian_ik(joints, constrains, ref_diff, max_iteration = 
         }
       }
       if(e.type === ConstrainType.RefPose){
-        return e.value - joints[e.joint].value;
+        return current_diff_diff[e.joint] * step;
       }
       enables[i] = false;
       return [0,0,0];
     });
-
-    // 現在の関節速度
-    const current_diff = ref_diff.map((e,i) => joints[i].value - before_values[i]);
-    // 現在の関節速度と目標の関節速度の差分
-    const current_diff_diff = ref_diff.map((e,i)=> joints[i].type === JointType.Revolution ? e - current_diff[i] : 0);
 
     // 差分をまとめる
     const dist_mean = math.mean(diffs.map(diff => math.norm(diff)));
@@ -708,17 +712,18 @@ export function solve_jacobian_ik(joints, constrains, ref_diff, max_iteration = 
 
     // 差分が(step / 2)より小さければ計算終了
     if (dist_mean < step / 2 &&
-        ref_mean < step / 10) {
+        ref_mean < 0.001) {
       break;
     }
 
     // 目標エフェクタ変位 = (差分ベクトル / 差分ベクトル長) * step
-    diffs = diffs.map(e => math.multiply(e, step / dist_mean));
+    diffs = diffs.map(e => math.multiply(normalize(e), step));
 
     // 目標エフェクタ変位にしたがって関節角度ベクトルを更新
     // Δθ = Δp * J^+
     // θ <- θ + Δθ
-    values = calcJacobianTask(joints, values, diffs.filter((e,i)=>enables[i]), constrains.filter((e,i)=>enables[i]), current_diff_diff.map(e=> e * step * 2));
+    values = calcJacobianTask(joints, values, diffs.filter((e,i)=>enables[i]), constrains.filter((e,i)=>enables[i]), current_diff_diff.map(e=> e * step));
+    // values = add(values, current_diff_diff.map(e=> e * step));
 
     setJointValues(joints, values);
   }
