@@ -1,6 +1,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils.js';
 // import Stats from 'three/examples/jsm/libs/stats.module.js';
@@ -23,7 +24,9 @@ const canvas = document.getElementById("canvas");
 let model_bones = [];
 const model_constrains = [
   {priority: 1, bone: 33, joint: -1, pos: [0.5,1,0], object: null, type: ConstrainType.Position},
-  // {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: null, type: ConstrainType.Position},
+  {priority: 0, bone: 33, joint: -1, rot: [0.5,1,0], object: null, type: ConstrainType.Orientation},
+  // {priority: 1, bone: 33, joint: -1, rot: [0.5,1,0], object: null, type: ConstrainType.Orientation},
+  {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: null, type: ConstrainType.Position},
 ];
 
 const constrains = [
@@ -363,10 +366,10 @@ function init_three() {
   scene.add(axis);
 
   // Controls
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.minDistance = 2;
-  controls.maxDistance = 20;
-  controls.update();
+  const orbit = new OrbitControls(camera, renderer.domElement);
+  orbit.minDistance = 2;
+  orbit.maxDistance = 20;
+  orbit.update();
 
   // 拘束
   [...constrains, ...model_constrains].forEach(constrain => {
@@ -380,10 +383,32 @@ function init_three() {
       constrain.object.position.set(...constrain.pos);
     }else if(constrain.type === ConstrainType.Orientation){
       constrain.object.rotation.set(...constrain.rot);
-    }else if(constrain.type === ConstrainType.Orientation){
+    }else if(constrain.type === ConstrainType.OrientationBound){
       constrain.object.rotation.set(...constrain.base_rot);
     }
     scene.add(constrain.object);
+    
+    // 掴んで移動
+    const control = new TransformControls( camera, renderer.domElement );
+    control.size = 0.3;
+    control.setMode(
+      constrain.type === ConstrainType.Position ? "translate" :
+      constrain.type === ConstrainType.Orientation ? "rotate" :
+      constrain.type === ConstrainType.OrientationBound ? "rotate" : "translate");
+    control.attach(constrain.object);
+    control.addEventListener( 'change', (event) =>{
+      if(constrain.type === ConstrainType.Position){
+        constrain.pos = convertVector3ToArray(constrain.object.position);
+      }else if(constrain.type === ConstrainType.Orientation){
+        constrain.rot = convertVector3ToArray(constrain.object.rotation);
+      }else if(constrain.type === ConstrainType.OrientationBound){
+        constrain.base_rot = convertVector3ToArray(constrain.object.rotation);
+      }
+    });
+    control.addEventListener( 'dragging-changed', (event) => {
+      orbit.enabled = ! event.value;
+    });
+    scene.add(control);
   })
 
   

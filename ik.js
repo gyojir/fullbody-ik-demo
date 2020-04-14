@@ -681,7 +681,7 @@ export function solve_jacobian_ik(joints, constrains, ref_diff, max_iteration = 
         const curr = getEffectorWorldMatrix(joints, e.joint);
         const target = rotXYZ(...e.rot);
         const err = getRotationError(target, curr);
-        return mul(math.resize(curr,[3,3]),err);
+        return mul(math.resize(curr,[3,3]),err).toArray();
       }
       // 向き範囲制限拘束
       else if(e.type === ConstrainType.OrientationBound){
