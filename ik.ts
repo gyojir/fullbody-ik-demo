@@ -136,9 +136,11 @@ export function setJointValues(joints: Joint[], values: number[]) {
  * @param constrains 
  */
 export function computeJacobian(joints: Joint[], values: number[], constrains: Constrain[]): math.Matrix {
-  // ヤコビアンは（関節角度ベクトル長 × 拘束数*3次元）の行列
-  const jac = zeros(values.length, constrains.length * 3).toArray() as number[][];
+  // ヤコビアンは（関節角度ベクトル長 × 拘束数*次元）の行列
+  const jac = zeros(values.length, constrains.reduce((prev,curr)=>prev+ConstrainDim[curr.type], 0)).toArray() as number[][];
   
+  let offset = 0;
+
   // 各拘束に対してヤコビアンを求める
   constrains.forEach((constrain, index) => {
 
@@ -155,23 +157,28 @@ export function computeJacobian(joints: Joint[], values: number[], constrains: C
             const tmp_joint = joints[j];            
             const value = values[j];
 
-            const mat = tmp_joint.type === JointType.Revolution ?
+            const mat =
               // 回転ジョイント
+              tmp_joint.type === JointType.Revolution ?
               (i === j ? // i == j で偏微分
                 (angle: number)=>diffRotAxis(tmp_joint.axis,angle) :
                 (angle: number)=>rotAxis(tmp_joint.axis,angle)) :
               // スライダジョイント
+              tmp_joint.type === JointType.Slide ?
               (i === j ? // i == j で偏微分
                 (len: number)=>diffTranslateAxis(tmp_joint.axis) :
-                (len: number)=>translateAxis(tmp_joint.axis,len))
+                (len: number)=>translateAxis(tmp_joint.axis,len))  :
+              // スライダジョイント
+              tmp_joint.type === JointType.Static ?
+                ()=>rotXYZ(...tmp_joint.rotation) : () => identity(4);
                       
             tmp = mul(translate(...tmp_joint.offset), mat(value), scale(...tmp_joint.scale), tmp);
           }
 
           const arr = tmp.toArray() as number[][];
-          jac[i][index*3 + 0] = arr[0][3];
-          jac[i][index*3 + 1] = arr[1][3];
-          jac[i][index*3 + 2] = arr[2][3];
+          jac[i][offset + 0] = arr[0][3];
+          jac[i][offset + 1] = arr[1][3];
+          jac[i][offset + 2] = arr[2][3];
           
       }
       // 向き拘束
@@ -182,12 +189,14 @@ export function computeJacobian(joints: Joint[], values: number[], constrains: C
 
         // 回転ジョイント
         if(joint.type === JointType.Revolution) {
-          jac[i][index*3 + 0] = axis[0];
-          jac[i][index*3 + 1] = axis[1];
-          jac[i][index*3 + 2] = axis[2];
+          jac[i][offset + 0] = axis[0];
+          jac[i][offset + 1] = axis[1];
+          jac[i][offset + 2] = axis[2];
         }
       }      
     }
+
+    offset += ConstrainDim[constrain.type];
   });
 
   return math.matrix(jac);
@@ -246,7 +255,7 @@ export function computeJacobian2(joints: Joint[], values: number[], constrains: 
           jac[i][offset + 2] = axis[2];
         }
       }
-      // 向き拘束
+      // 参照姿勢拘束
       else if(constrain.type === ConstrainType.RefPose){
         // 回転ジョイント
         if(joint.type === JointType.Revolution) {

@@ -14,7 +14,7 @@ export type Bone = {
   animation_object?: THREE.Object3D;
   parentIndex?: number;
   children: Bone[];
-}
+};
 
 export type Joint = {
   boneIndex: number;
@@ -43,7 +43,7 @@ export type Constrain = {
   control?: TransformControls;
   type: any;
   enable: boolean;
-}
+};
 
 export enum ConstrainType{
   Position,
