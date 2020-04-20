@@ -28,6 +28,9 @@ export function identity(dim: number): math.Matrix {
 
 // 0行列ラップ
 export function zeros(m: number, n?: number): math.Matrix {
+  if(n === undefined){
+    return math.zeros(m) as math.Matrix;
+  }
   return math.zeros(m, n) as math.Matrix;
 }
 

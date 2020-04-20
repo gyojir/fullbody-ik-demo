@@ -407,7 +407,7 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
  * @param step 
  * @param ref_diff 
  */
-export function solve_jacobian_ik(joints: Joint[], constrains: Constrain[], max_iteration = 1, step = 0.05, ref_diff = (math.zeros(joints.length) as math.Matrix).toArray() as number[]): number[] {
+export function solve_jacobian_ik(joints: Joint[], constrains: Constrain[], max_iteration = 1, step = 0.05, ref_diff = zeros(joints.length).toArray() as number[]): number[] {
   let min_dist = Number.MAX_VALUE;
   let min_ref_diff = Number.MAX_VALUE;
   let best_values = joints.map(e=>e.value);
