@@ -41,7 +41,8 @@ export function matrixToArray3(mat: math.Matrix): FArray3 {
 
 // 正規化
 export function normalize<T extends number | number[] | math.Matrix>(mat: T): T {
-  return math.divide(mat, math.norm(mat)) as T;
+  const norm = math.norm(mat);
+  return norm < Number.EPSILON ? mat : math.divide(mat, norm) as T;
 }
 
 // 行列成分抽出

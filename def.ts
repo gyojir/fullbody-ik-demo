@@ -12,7 +12,7 @@ export type Bone = {
   slide?: boolean;
   object?: THREE.Object3D;
   animation_object?: THREE.Object3D;
-  parentIndex?: number;
+  parentIndex: number;
   children: Bone[];
 };
 

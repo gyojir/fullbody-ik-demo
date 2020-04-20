@@ -377,7 +377,7 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
     const y = mul(math.subtract(math.flatten(diffs), mul(dq0,jac_aux)), sSI);
 
     // Δq = Δq0 + yW
-    return add(dq0, mul(y,w));
+    return add(dq0, mul(y,w)).toArray() as number[];
   }
   
   // 優先度順にタスク実行

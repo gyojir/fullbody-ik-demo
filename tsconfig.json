@@ -7,7 +7,8 @@
         "removeComments": true,
         "preserveConstEnums": true,
         "sourceMap": true,
-        "downlevelIteration": true
+        "downlevelIteration": true,
+        "strictNullChecks": true
     },
     "include": [
         "."

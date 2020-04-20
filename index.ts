@@ -24,24 +24,26 @@ let model : THREE.Object3D | undefined;
 let animation_compute_model : THREE.Object3D | undefined;
 let skeleton : THREE.SkeletonHelper | undefined;
 let mixer : THREE.AnimationMixer | undefined;
-var actions : THREE.AnimationAction[];
+var actions : THREE.AnimationAction[] = [];
 let clock : THREE.Clock | undefined;
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 
-let model_bones : Bone[] = [];
-const model_constrains: Constrain[] = [
-  {priority: 1, bone: 15, joint: -1, pos: [0.5,1,0], object: null, type: ConstrainType.Position, enable: true},
-  {priority: 1, bone: 15, joint: -1, rot: [0.5,1,0], object: null, type: ConstrainType.Orientation, enable: true},
-  {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: null, type: ConstrainType.Position, enable: true},
+/*
+let bones : Bone[] = [];
+const constrains: Constrain[] = [
+  {priority: 1, bone: 15, joint: -1, pos: [0.5,1,0], object: undefined, type: ConstrainType.Position, enable: true},
+  {priority: 1, bone: 15, joint: -1, rot: [0.5,1,0], object: undefined, type: ConstrainType.Orientation, enable: true},
+  {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: undefined, type: ConstrainType.Position, enable: true},
 ];
+*/
 
 const constrains: Constrain[] = [
-  // {priority: 1, bone: 2, joint: -1, pos: [1,1,0], object: null, type: ConstrainType.Position, enable: true},
-  // {priority: 0, bone: 2, joint: -1, rot: [1,0,0], object: null, type: ConstrainType.Orientation, enable: true},
-  // {priority: 0, bone: 2, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: null, type: ConstrainType.OrientationBound, enable: true},
-  // {priority: 0, bone: 0, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: null, type: ConstrainType.OrientationBound, enable: true},
-  // {priority: 0, bone: 4, joint: -1, pos: [-1,1,0], object: null, type: ConstrainType.Position, enable: true}
+  {priority: 1, bone: 2, joint: -1, pos: [1,1,0], object: undefined, type: ConstrainType.Position, enable: true},
+  {priority: 0, bone: 2, joint: -1, rot: [1,0,0], object: undefined, type: ConstrainType.Orientation, enable: true},
+  {priority: 0, bone: 2, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: undefined, type: ConstrainType.OrientationBound, enable: true},
+  {priority: 0, bone: 0, joint: -1, bounds: {gamma_max: Math.PI/4}, base_rot: [0,0,0], object: undefined, type: ConstrainType.OrientationBound, enable: true},
+  {priority: 1, bone: 4, joint: -1, pos: [-1,1,0], object: undefined, type: ConstrainType.Position, enable: true}
 ];
 
 let bones: Bone[] = [];
@@ -49,15 +51,18 @@ const root: Bone = {
   offset: [0,0,0],
   rotation: [0,0,0],
   scale: [1,1,1],
-  slide: true, // ik計算用スライドジョイントフラグ
+  slide: false, // ik計算用スライドジョイントフラグ
+  parentIndex: -1,
   children: [{
       offset: [0.5,1,0],
       rotation: [0,0,0],
       scale: [1,1,1],
+      parentIndex: -1,
       children: [{
         offset: [0,1,0],
         rotation: [0,0,0],
         scale: [1,1,1],
+        parentIndex: -1,
         children: []
       }]
     },
@@ -65,10 +70,12 @@ const root: Bone = {
       offset: [-0.5,1,0],
       rotation: [0,0,0],
       scale: [1,1,1],
+      parentIndex: -1,
       children: [{
         offset: [0,1,0],
         rotation: [0,0,0],
         scale: [1,1,1],
+        parentIndex: -1,
         children: []
       }]
     },
@@ -76,10 +83,12 @@ const root: Bone = {
       offset: [0.5,0,0],
       rotation: [Math.PI,0,0],
       scale: [1,1,1],
+      parentIndex: -1,
       children: [{
         offset: [0,1,0],
         rotation: [0,0,0],
         scale: [1,1,1],
+        parentIndex: -1,
         children: []
       }]
     },
@@ -87,10 +96,12 @@ const root: Bone = {
       offset: [-0.5,0,0],
       rotation: [Math.PI,0,0],
       scale: [1,1,1],
+      parentIndex: -1,
       children: [{
         offset: [0,1,0],
         rotation: [0,0,0],
         scale: [1,1,1],
+        parentIndex: -1,
         children: []
       }]
     }
@@ -206,78 +217,8 @@ export function SliderAngleFloat3(label: string, v_rad: number[], v_degrees_min 
  * @param delta デルタ時間
  */
 function draw_imgui(delta: number): void {   
-
-  /*
-  {
-    ImGui.Begin("Debug Window");
-    ImGui.Dummy(new ImGui.ImVec2(400,0));
-    
-    // 全ジョイント表示
-    bones.forEach((bone,i)=>{
-      ImGui.PushID(i);
-      ImGui.SliderFloat3(`pos[${i}]`, bone.offset, -10, 10);
-      SliderAngleFloat3(`rot[${i}]`, bone.rotation);
-      if(bone.object){
-        bone.object.position.set(...bone.offset);
-        bone.object.rotation.set(...bone.rotation);
-      }
-      ImGui.PopID();
-      ImGui.Separator();
-    })
-
-    // ik計算
-    {
-      // ik計算しやすい形に変換
-      const joints = convertBonesToJoints(bones);
-      const converted_constrains = constrains.map(e=> ({
-        ...e,
-        joint: convertBoneToJointIndex(joints, e.bone)
-      }));
-
-      solve_jacobian_ik(joints, converted_constrains, 1);
-      convertJointsToBones(joints, bones);
-      
-      // デバッグ表示
-      converted_constrains.forEach((constrain,i) => {
-        const pos = getEffectorWorldPosition(joints, constrain.joint);
-
-        if(constrain.type === ConstrainType.Position){
-          ImGui.SliderFloat3(`pos constrain[${i}]`, constrain.pos, -2, 2)
-          ImGui.SliderFloat3(`effector_pos[${i}]`, pos, -100, 100);
-          if(constrain.object){
-            constrain.object.position.set(...constrain.pos);
-          }
-        }
-        else if(constrain.type === ConstrainType.Orientation){
-          const rot = getEffectorOrientation(joints, constrain.joint);
-          SliderAngleFloat3(`rot constrain[${i}]`, constrain.rot, -180, 180)
-          SliderAngleFloat3(`effector_rot[${i}]`, rot, -180, 180);
-          if(constrain.object){
-            constrain.object.rotation.set(...constrain.rot);  
-            constrain.object.position.set(...pos);
-          }
-        }
-        else if(constrain.type === ConstrainType.OrientationBound){
-          const parentBone = bones[constrain.bone].parentIndex;
-          const parent = parentBone != -1 ? getEffectorWorldMatrix(joints, convertBoneToJointIndex(joints,parentBone)) : math.identity(4);
-          const rot = getEffectorOrientation(joints, constrain.joint);
-          SliderAngleFloat3(`rot bound constrain[${i}]`, constrain.base_rot, -180, 180)
-          SliderAngleFloat3(`effector_rot[${i}]`, rot, -180, 180);
-          if(constrain.object){
-            constrain.object.rotation.set(...getRotationXYZ(mul(parent, rotXYZ(...constrain.base_rot))));  
-            constrain.object.position.set(...pos);
-          }
-        }
-        ImGui.Separator();
-      })
-    }
-
-    ImGui.End();
-  }
-  */
-
   // ------------------------------------------
-  if(actions && model){
+  {
     ImGui.Begin("Debug Window2");
     ImGui.Dummy(new ImGui.ImVec2(400,0));
     
@@ -287,23 +228,29 @@ function draw_imgui(delta: number): void {
     })
 
     // model→bones
-    model_bones.forEach(bone =>{
-      bone.offset = convertVector3ToArray(bone.object.position);
-      bone.rotation = convertVector3ToArray(bone.object.rotation);
-      bone.scale = convertVector3ToArray(bone.object.scale);
+    bones.forEach(bone =>{
+      bone.offset = convertVector3ToArray(bone.object?.position || new THREE.Vector3());
+      bone.rotation = convertVector3ToArray(bone.object?.rotation || new THREE.Vector3());
+      bone.scale = convertVector3ToArray(bone.object?.scale || new THREE.Vector3());
     });
     
     // ik計算しやすい形に変換
-    const joints = convertBonesToJoints(model_bones);
+    const joints = convertBonesToJoints(bones);
     
     // 回転ジョイントに関しては、参照ポーズとの差分に対して解を求める。
     // Δθref = θref - θ
     // スケルトンアニメーション
-    ImGui.SliderFloat(`timeScale`,  (scale = mixer.timeScale) => mixer.timeScale = scale, 0, 5);
-    mixer.update(delta);
+    if(mixer !== undefined){
+      const _mixer = mixer;
+      ImGui.SliderFloat(`timeScale`,  (scale = _mixer.timeScale) => _mixer.timeScale = scale, 0, 5);
+      mixer.update(delta);
+    }
     const ref_diff = joints.map((joint,i)=> {
-      const bone = model_bones[joint.boneIndex];
+      const bone = bones[joint.boneIndex];
       const obj = bone.animation_object;
+      if(obj === undefined){
+        return 0;
+      }
       const pos = convertVector3ToArray(obj.position);
       const rot = convertVector3ToArray(obj.rotation);
       return (
@@ -319,7 +266,7 @@ function draw_imgui(delta: number): void {
     });
 
     const converted_constrains = [
-      ...model_constrains.map(e=> ({
+      ...constrains.map(e=> ({
         ...e,
         joint: convertBoneToJointIndex(joints, e.bone)
       })),
@@ -327,51 +274,51 @@ function draw_imgui(delta: number): void {
     ];
 
     solve_jacobian_ik(joints, converted_constrains, 10, 0.1, ref_diff);
-    applyJointsToBones(joints, model_bones);
+    applyJointsToBones(joints, bones);
 
     // デバッグ表示
     if (ImGui.TreeNode("bones##1"))
     {
-      model_bones.forEach((e,i)=>{
-        ImGui.SliderFloat3(`pos[${i}] ${e.object.name}`, e.offset, -5, 5)
-        SliderAngleFloat3(`rot[${i}] ${e.object.name}`, e.rotation, -180, 180)
-        ImGui.SliderFloat3(`scale[${i}] ${e.object.name}`, e.scale, 0.001, 1)
+      bones.forEach((e,i)=>{
+        ImGui.SliderFloat3(`pos[${i}] ${e.object?.name}`, e.offset, -5, 5)
+        SliderAngleFloat3(`rot[${i}] ${e.object?.name}`, e.rotation, -180, 180)
+        ImGui.SliderFloat3(`scale[${i}] ${e.object?.name}`, e.scale, 0.001, 1)
       });
     }
     ImGui.Separator();
 
     // bones->model
-    model_bones.forEach((e,i)=>{
-      e.object.position.set(...e.offset);
-      e.object.rotation.set(...e.rotation);
-      e.object.scale.set(...e.scale);
+    bones.forEach((e,i)=>{
+      e.object?.position.set(...e.offset);
+      e.object?.rotation.set(...e.rotation);
+      e.object?.scale.set(...e.scale);
     })
     
     // デバッグ表示
     if (ImGui.TreeNodeEx("constrains##1", ImGui.ImGuiTreeNodeFlags.DefaultOpen))
     {
       converted_constrains.forEach((constrain,i) => {
-        const origin_constrain = model_constrains[i];
+        const origin_constrain = constrains[i];
         const pos = getJointWorldPosition(joints, constrain.joint);
 
         if(ImGui.Checkbox(`enable[${i}]`, (value = origin_constrain.enable) => origin_constrain.enable = value)){
-          origin_constrain.object.visible = origin_constrain.enable;
-          origin_constrain.control.enabled = origin_constrain.enable;
+          origin_constrain.object && (origin_constrain.object.visible = origin_constrain.enable);
+          origin_constrain.control && (origin_constrain.control.enabled = origin_constrain.enable);
         }
 
         if(constrain.type === ConstrainType.Position){
           ImGui.SliderFloat3(`pos constrain[${i}]`, constrain.pos, -2, 2)
           ImGui.SliderFloat3(`effector_pos[${i}]`, pos, -100, 100);
           if(constrain.object){
-            constrain.object.position.set(...constrain.pos);
+            constrain.object.position.set(...constrain.pos || [0,0,0]);
           }
         }
         else if(constrain.type === ConstrainType.Orientation){
           const rot = getJointOrientation(joints, constrain.joint);
-          SliderAngleFloat3(`rot constrain[${i}]`, constrain.rot, -180, 180)
+          SliderAngleFloat3(`rot constrain[${i}]`, constrain.rot || [0,0,0], -180, 180)
           SliderAngleFloat3(`effector_rot[${i}]`, rot, -180, 180);
           if(constrain.object){
-            constrain.object.rotation.set(...constrain.rot);  
+            constrain.object.rotation.set(...constrain.rot || [0,0,0]);  
             constrain.object.position.set(...pos);
           }
         }
@@ -379,10 +326,10 @@ function draw_imgui(delta: number): void {
           const parentBone = bones[constrain.bone].parentIndex;
           const parent = parentBone != -1 ? getJointWorldMatrix(joints, convertBoneToJointIndex(joints,parentBone)) : math.identity(4);
           const rot = getJointOrientation(joints, constrain.joint);
-          SliderAngleFloat3(`rot bound constrain[${i}]`, constrain.base_rot, -180, 180)
+          SliderAngleFloat3(`rot bound constrain[${i}]`, constrain.base_rot || [0,0,0], -180, 180)
           SliderAngleFloat3(`effector_rot[${i}]`, rot, -180, 180);
           if(constrain.object){
-            constrain.object.rotation.set(...getRotationXYZ(mul(parent, rotXYZ(...constrain.base_rot))));  
+            constrain.object.rotation.set(...getRotationXYZ(mul(parent, rotXYZ(...constrain.base_rot || [0,0,0]))));  
             constrain.object.position.set(...pos);
           }
         }
@@ -456,19 +403,29 @@ function init_three() {
   // -----------------------------------------
   // 拘束
   // -----------------------------------------
-  [...constrains, ...model_constrains].forEach(constrain => {
+  constrains.forEach(constrain => {
+    if(scene === undefined ||
+       camera === undefined ||
+       renderer === undefined){
+      return;
+    }
+
     const geometry =
       constrain.type === ConstrainType.Position ? new THREE.SphereGeometry(0.1) :
       constrain.type === ConstrainType.Orientation ? new THREE.CylinderGeometry(0, 0.05, 0.3) :
-      constrain.type === ConstrainType.OrientationBound ? new THREE.CylinderGeometry(0.1, 0, 0.2) : null;
-    const material = new THREE.MeshStandardMaterial({color: 0xFFFFFF, wireframe: true});
+      constrain.type === ConstrainType.OrientationBound ? new THREE.CylinderGeometry(0.1, 0, 0.2) : undefined;
+    const material = new THREE.MeshStandardMaterial({color: 0xFFFFFF, wireframe: true});    
+    if(geometry === undefined){
+      return;
+    }
+
     constrain.object = new THREE.Mesh(geometry, material);
     if(constrain.type === ConstrainType.Position){
-      constrain.object.position.set(...constrain.pos);
+      constrain.object.position.set(...constrain.pos || [0,0,0]);
     }else if(constrain.type === ConstrainType.Orientation){
-      constrain.object.rotation.set(...constrain.rot);
+      constrain.object.rotation.set(...constrain.rot || [0,0,0]);
     }else if(constrain.type === ConstrainType.OrientationBound){
-      constrain.object.rotation.set(...constrain.base_rot);
+      constrain.object.rotation.set(...constrain.base_rot || [0,0,0]);
     }
     scene.add(constrain.object);
     
@@ -483,11 +440,11 @@ function init_three() {
     control.attach(constrain.object);
     control.addEventListener( 'change', (event) =>{
       if(constrain.type === ConstrainType.Position){
-        constrain.pos = convertVector3ToArray(constrain.object.position);
+        constrain.pos = convertVector3ToArray(constrain.object?.position || new THREE.Vector3());
       }else if(constrain.type === ConstrainType.Orientation){
-        constrain.rot = convertVector3ToArray(constrain.object.rotation);
+        constrain.rot = convertVector3ToArray(constrain.object?.rotation || new THREE.Vector3());
       }else if(constrain.type === ConstrainType.OrientationBound){
-        constrain.base_rot = convertVector3ToArray(constrain.object.rotation);
+        constrain.base_rot = convertVector3ToArray(constrain.object?.rotation || new THREE.Vector3());
       }
     });
     control.addEventListener( 'dragging-changed', (event) => {
@@ -499,6 +456,7 @@ function init_three() {
   // -----------------------------------------
   // モデルロード
   // -----------------------------------------
+  /*
   var loader = new GLTFLoader();
   loader.load(modelfile, function ( gltf ) {
     model = gltf.scene;
@@ -515,21 +473,21 @@ function init_three() {
           offset: convertVector3ToArray(object.position),
           rotation: convertVector3ToArray(object.rotation),
           scale: convertVector3ToArray(object.scale),
-          parentIndex: model_bones.findIndex(e=> e.object.id === object.parent.id),
+          parentIndex: bones.findIndex(e=> e.object.id === object.parent.id),
           children: []
         }
-        model_bones.push(bone);    
+        bones.push(bone);    
       }
     });
-    model_bones[0].static = true;
-    // model_bones[0].slide = true;
+    bones[0].static = true;
+    // bones[0].slide = true;
 
     // アニメーション用ダミーモデル
     animation_compute_model = SkeletonUtils.clone(model) as THREE.Object3D;
     animation_compute_model.visible = false;
     scene.add( animation_compute_model );
 
-    model_bones.forEach(bone=>{
+    bones.forEach(bone=>{
       bone.animation_object = animation_compute_model.getObjectByName(bone.object.name);
     });
 
@@ -550,12 +508,12 @@ function init_three() {
     skeleton_2.visible = true;
     scene.add( skeleton_2 );
   } );
+  */
 
   // -----------------------------------------
   // 組み立て
   // -----------------------------------------
-  /*
-  const build = (tree, parent)=>{
+  const build = (tree: Bone, parentObject: THREE.Object3D, parentIndex: number)=>{
     const height = tree.children.length > 0 ? 1 : 0.2;
     const geometry = new THREE.CylinderGeometry( 0, 0.05, height);
     geometry.vertices.forEach(e=>e.y+=height/2);
@@ -563,25 +521,28 @@ function init_three() {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(...tree.offset);
     mesh.rotation.set(...tree.rotation);
-    parent.object.add(mesh);
+    parentObject.add(mesh);
 
     tree.object = mesh;
-    tree.index = bones.length;
-    tree.parentIndex = parent.index;
+    tree.parentIndex = parentIndex;
     bones.push(tree);
 
-    tree.children.forEach(e=> build(e, tree));
+    const index = bones.length - 1;
+    tree.children.forEach(e=> build(e, mesh, index));
   }
   const group = new THREE.Group();
-  build(root, {object: group, index: -1});
+  build(root, group, -1);
   scene.add(group);
-  */
 }
 
 /**
  * ウィンドウリサイズ
  */
 function onWindowResize() {
+  if(camera === undefined ||
+     renderer === undefined){
+    return;
+  }
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -592,8 +553,15 @@ function onWindowResize() {
  * @param time 
  */
 function animate(time: number) {
+  if(scene === undefined ||
+     clock === undefined ||
+     renderer === undefined ||
+     camera === undefined){
+    requestAnimationFrame(animate);
+    return;
+  }
+
   const delta = clock.getDelta();
-  requestAnimationFrame(animate);
   ImGui_Impl.NewFrame(time);
   ImGui.NewFrame();
 
@@ -607,6 +575,8 @@ function animate(time: number) {
   ImGui.EndFrame();
   ImGui.Render();
   ImGui_Impl.RenderDrawData(ImGui.GetDrawData());
+
+  requestAnimationFrame(animate);
 }
 
 // 実行
