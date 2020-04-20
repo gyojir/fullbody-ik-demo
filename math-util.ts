@@ -436,6 +436,17 @@ export function cancelScaling(mat: math.Matrix): math.Matrix{
 }
 
 /**
+ * 平行移動成分をキャンセルする
+ * @param mat 
+ */
+export function cancelTranslate(mat: math.Matrix): math.Matrix{
+  const m = mat.toArray() as number[][];
+  m[0][3] = m[1][3] = m[2][3] = 0;
+  return math.matrix(m);
+}
+
+
+/**
  * 軸をベクトルに変換
  * @param axis 
  */

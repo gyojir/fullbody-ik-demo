@@ -9,7 +9,7 @@ import * as math from "mathjs";
 // import * as ImGui from "imgui-js/imgui";
 // import * as ImGui_Impl from "imgui-js/example/imgui_impl"
 import { getJointOrientation, getJointWorldMatrix, solve_jacobian_ik, getJointWorldPosition } from './ik';
-import { mul, rotXYZ, getRotationXYZ }from './math-util';
+import { mul, rotXYZ, getRotationXYZ, identity, cancelScaling, cancelTranslate }from './math-util';
 import { range, zip, rotWrap } from "./util";
 import { Joint, ConstrainType, JointType, FArray3, Bone, Constrain } from './def';
 const ImGui_Impl = require("imgui-js/dist/imgui_impl.umd");
@@ -414,11 +414,11 @@ function init_three() {
       constrain.type === ConstrainType.Position ? new THREE.SphereGeometry(0.1) :
       constrain.type === ConstrainType.Orientation ? new THREE.CylinderGeometry(0, 0.05, 0.3) :
       constrain.type === ConstrainType.OrientationBound ? new THREE.CylinderGeometry(0.1, 0, 0.2) : undefined;
-    const material = new THREE.MeshStandardMaterial({color: 0xFFFFFF, wireframe: true});    
     if(geometry === undefined){
       return;
     }
 
+    const material = new THREE.MeshStandardMaterial({color: 0xFFFFFF, wireframe: true});    
     constrain.object = new THREE.Mesh(geometry, material);
     if(constrain.type === ConstrainType.Position){
       constrain.object.position.set(...constrain.pos || [0,0,0]);
@@ -439,12 +439,19 @@ function init_three() {
       constrain.type === ConstrainType.OrientationBound ? "rotate" : "translate");
     control.attach(constrain.object);
     control.addEventListener( 'change', (event) =>{
+      if(constrain.object === undefined){
+        return;
+      }
       if(constrain.type === ConstrainType.Position){
-        constrain.pos = convertVector3ToArray(constrain.object?.position || new THREE.Vector3());
+        constrain.pos = convertVector3ToArray(constrain.object.position);
       }else if(constrain.type === ConstrainType.Orientation){
-        constrain.rot = convertVector3ToArray(constrain.object?.rotation || new THREE.Vector3());
+        constrain.rot = convertVector3ToArray(constrain.object.rotation);
       }else if(constrain.type === ConstrainType.OrientationBound){
-        constrain.base_rot = convertVector3ToArray(constrain.object?.rotation || new THREE.Vector3());
+        const joints = convertBonesToJoints(bones);
+        const parentBone = bones[constrain.bone].parentIndex;
+        const parent = parentBone != -1 ? getJointWorldMatrix(joints, convertBoneToJointIndex(joints,parentBone)) : identity(4);
+        const rotInv = math.transpose(cancelTranslate(cancelScaling(parent)));
+        constrain.base_rot = getRotationXYZ(mul(rotInv, rotXYZ(...convertVector3ToArray(constrain.object.rotation))));
       }
     });
     control.addEventListener( 'dragging-changed', (event) => {
