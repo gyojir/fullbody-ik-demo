@@ -193,7 +193,16 @@ export function computeJacobian(joints: Joint[], values: number[], constrains: C
           jac[i][offset + 1] = axis[1];
           jac[i][offset + 2] = axis[2];
         }
-      }      
+      }
+      // 参照姿勢拘束
+      else if(constrain.type === ConstrainType.RefPose){
+        // 回転ジョイント
+        if(joint.type === JointType.Revolution) {
+          if(constrain.joint === i){
+            jac[i][offset] = 1;
+          }
+        }
+      }
     }
 
     offset += ConstrainDim[constrain.type];
