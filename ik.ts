@@ -309,8 +309,8 @@ export function computeSRInverse(jac: math.Matrix): math.Matrix {
 export function computeWeightedPseudoInverse(jac: math.Matrix, weight: math.Matrix): math.Matrix {
   const jacT = math.transpose(jac);
   const WI = inv(math.matrix(weight));
-  // J^T * W^-1 * (J * J^T * W^-1)^-1
-  return mul(jacT, WI, inv(mul(jac, jacT, WI)))
+  // W^-1 * J^T * (J * W^-1 * J^T)^-1
+  return mul(WI, jacT, inv(mul(jac, WI, jacT)))
 }
 
 /**
@@ -355,7 +355,7 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
     }
 
     // 加重行列を単位行列で初期化
-    // const weight = math.identity(joints.length)     
+    // const weight = identity(joints.length)     
     // ヤコビアンの計算
     const jac = computeJacobian2(joints, values, constrains)
     // ヤコビアンの擬似逆行列
