@@ -131,28 +131,28 @@ function convertBoneToJointIndex(joints: Joint[], boneIndex: number): number {
  * @returns ジョイント
  */
 function convertBonesToJoints(bones: Bone[]): Joint[] {
-  const joints: any = [];
+  const joints: Joint[] = [];
   const indices: number[] = [];
   bones.forEach((bone,i)=>{
     let parent = (()=> { let j = 0; return ()=> j++ === 0 && indices[bone.parentIndex] !== undefined ? indices[bone.parentIndex] : joints.length - 1; })();
 
     if(bone.static) {
-      joints.push({ boneIndex: i, type: JointType.Static, axis: 0, value: 0, offset: bone.offset, scale: bone.scale, rotation: bone.rotation, parentIndex: parent(), dirty: true, world: math.identity(4) });      
+      joints.push({ boneIndex: i, type: JointType.Static, axis: 0, value: 0, offset: bone.offset, scale: bone.scale, rotation: bone.rotation, parentIndex: parent(), dirty: true, world: identity(4) });      
     }
     else {
       // value = 関節変位 q
       // スライダジョイントを挿入
       if(bone.slide){
-        joints.push({ boneIndex: i, type: JointType.Slide, axis: 0, value: bone.offset[0], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
-        joints.push({ boneIndex: i, type: JointType.Slide, axis: 1, value: bone.offset[1], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
-        joints.push({ boneIndex: i, type: JointType.Slide, axis: 2, value: bone.offset[2], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
+        joints.push({ boneIndex: i, type: JointType.Slide, axis: 0, value: bone.offset[0], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: identity(4) });
+        joints.push({ boneIndex: i, type: JointType.Slide, axis: 1, value: bone.offset[1], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: identity(4) });
+        joints.push({ boneIndex: i, type: JointType.Slide, axis: 2, value: bone.offset[2], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: identity(4) });
       }
   
       // XYZ回転
-      let offset = bone.slide ? [0,0,0] : bone.offset;
-      joints.push({ boneIndex: i, type: JointType.Revolution, axis: 0, value: bone.rotation[0], offset: offset, scale: [1,1,1],  parentIndex: parent(), dirty: true, world: math.identity(4) });
-      joints.push({ boneIndex: i, type: JointType.Revolution, axis: 1, value: bone.rotation[1], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: math.identity(4) });
-      joints.push({ boneIndex: i, type: JointType.Revolution, axis: 2, value: bone.rotation[2], offset: [0,0,0], scale: bone.scale, parentIndex: parent(), dirty: true, world: math.identity(4) });
+      let offset: FArray3 = bone.slide ? [0,0,0] : bone.offset;
+      joints.push({ boneIndex: i, type: JointType.Revolution, axis: 0, value: bone.rotation[0], offset: offset, scale: [1,1,1],  parentIndex: parent(), dirty: true, world: identity(4) });
+      joints.push({ boneIndex: i, type: JointType.Revolution, axis: 1, value: bone.rotation[1], offset: [0,0,0], scale: [1,1,1], parentIndex: parent(), dirty: true, world: identity(4) });
+      joints.push({ boneIndex: i, type: JointType.Revolution, axis: 2, value: bone.rotation[2], offset: [0,0,0], scale: bone.scale, parentIndex: parent(), dirty: true, world: identity(4) });
     }
     indices[i] = joints.length - 1;
   });

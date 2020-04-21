@@ -23,7 +23,7 @@ export type Joint = {
   value: number;
   offset: FArray3;
   scale: FArray3;
-  rotation: FArray3;
+  rotation?: FArray3;
   parentIndex: number;
   dirty: boolean;
   world: math.Matrix; 

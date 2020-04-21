@@ -48,7 +48,7 @@ export function getBoneLocalMatrix(joints: Joint[], bone: number): math.Matrix {
         translate(...joint.offset),
         joint.type === JointType.Revolution ? rotAxis(joint.axis, joint.value) :
         joint.type === JointType.Slide ? translateAxis(joint.axis, joint.value) :
-        joint.type === JointType.Static ? rotXYZ(...joint.rotation) : 1,
+        joint.type === JointType.Static ? rotXYZ(...joint.rotation || [0,0,0]) : 1,
         scale(...joint.scale));
     });
 
@@ -82,7 +82,7 @@ export function getJointWorldMatrix(joints: Joint[], i: number): math.Matrix {
       translate(...joint.offset),
       joint.type === JointType.Revolution ? rotAxis(joint.axis, joint.value) :
       joint.type === JointType.Slide ? translateAxis(joint.axis, joint.value) : 
-      joint.type === JointType.Static ? rotXYZ(...joint.rotation) : 1,
+      joint.type === JointType.Static ? rotXYZ(...joint.rotation || [0,0,0]) : 1,
       scale(...joint.scale));
 
     joint.world = mul(getWorldMatrixRecursive(joint.parentIndex), local);
@@ -170,7 +170,7 @@ export function computeJacobian(joints: Joint[], values: number[], constrains: C
                 (len: number)=>translateAxis(tmp_joint.axis,len))  :
               // スライダジョイント
               tmp_joint.type === JointType.Static ?
-                ()=>rotXYZ(...tmp_joint.rotation) : () => identity(4);
+                ()=>rotXYZ(...tmp_joint.rotation || [0,0,0]) : () => identity(4);
                       
             tmp = mul(translate(...tmp_joint.offset), mat(value), scale(...tmp_joint.scale), tmp);
           }
@@ -447,22 +447,22 @@ export function solve_jacobian_ik(joints: Joint[], constrains: Constrain[], max_
       // 位置拘束は単純に差分
       if(e.type === ConstrainType.Position){
         const p = getJointWorldPosition(joints, e.joint);
-        return math.subtract(e.pos, p) as FArray3;
+        return math.subtract(e.pos || [0,0,0], p) as FArray3;
       }
       // 向き拘束は回転軸を計算
       else if(e.type === ConstrainType.Orientation){
         const curr = getJointWorldMatrix(joints, e.joint);
-        const target = rotXYZ(...e.rot);
+        const target = rotXYZ(...e.rot || [0,0,0]);
         const err = getRotationError(target, curr);
         return mul(math.resize(curr,[3,3]),err).toArray() as FArray3;
       }
       // 向き範囲制限拘束
       else if(e.type === ConstrainType.OrientationBound){
         const curr = getBoneLocalMatrix(joints, e.bone);
-        const target = rotXYZ(...e.base_rot);
+        const target = rotXYZ(...e.base_rot || [0,0,0]);
         const [ay, az, t, gamma] = getRotationSpherical(curr,target, getSwapMatrix(1,2,0));
         // 範囲を超えた場合のみ戻す
-        if(gamma > e.bounds.gamma_max){
+        if(e.bounds && gamma > e.bounds.gamma_max){
           const world = math.resize(getJointWorldMatrix(joints, e.joint),[3,3]);
           const err = getRotationError(target, curr);
           return mul(world, err).toArray() as FArray3;
