@@ -198,7 +198,7 @@ function setAnimWeight(action: THREE.AnimationAction, weight: number) {
  * @param delta デルタ時間
  */
 function draw_imgui(delta: number): void {
-  ImGui.Begin("Debug Window2");
+  ImGui.Begin("Debug Window");
   ImGui.Dummy(new ImGui.ImVec2(400,0));
   
   // アニメーション
@@ -368,7 +368,8 @@ function init_three() {
   clock = new THREE.Clock();
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 1, 10000);
-  camera.position.set(2, 2, 2);
+  camera.position.set(5, 5, 5);
+  camera.setViewOffset( window.innerWidth, window.innerHeight * 2, 0, window.innerHeight * 0.3, window.innerWidth, window.innerHeight);
   scene.add(new THREE.AmbientLight(0xffffff, 0.5));
   const dirLight = new THREE.DirectionalLight(0xffffff, 1);
   dirLight.position.set(5, 10, 7.5);
@@ -546,6 +547,7 @@ function onWindowResize() {
     return;
   }
   camera.aspect = window.innerWidth / window.innerHeight;
+  camera.setViewOffset( window.innerWidth, window.innerHeight * 2, 0, window.innerHeight * 0.3, window.innerWidth, window.innerHeight);
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
