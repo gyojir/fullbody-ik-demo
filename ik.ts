@@ -335,11 +335,13 @@ export function computeRedundantCoefficients(eta: number[], jac: math.Matrix, ja
 export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Diff[], _constrains: Constrain[], diff_ref: number[]) {
   let values = math.clone(_values);
 
+  type Tasks = {
+    diffs: Diff[];
+    constrains: Constrain[];
+  }[];
+
   // 優先度でdiffとconstrainsを分解
-  const prioritized : {
-    diffs: Diff[],
-    constrains: Constrain[]
-  }[] = [{diffs: [], constrains: []},{diffs: [], constrains: []}];
+  const prioritized: Tasks = [{diffs: [], constrains: []},{diffs: [], constrains: []}];
   zip(_diffs, _constrains).forEach(([diff,constrain])=>{
     const p = constrain.priority > 0 ? 0 : 1;
     prioritized[p].constrains.push(constrain);
