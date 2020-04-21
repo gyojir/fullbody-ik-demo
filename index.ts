@@ -4,10 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils.js';
-// import Stats from 'three/examples/jsm/libs/stats.module.js';
 import * as math from "mathjs";
-// import * as ImGui from "imgui-js/imgui";
-// import * as ImGui_Impl from "imgui-js/example/imgui_impl"
 import { getJointOrientation, getJointWorldMatrix, solve_jacobian_ik, getJointWorldPosition } from './ik';
 import { mul, rotXYZ, getRotationXYZ, identity, cancelScaling, cancelTranslate }from './math-util';
 import { existFilter, rotWrap, SliderAngleFloat3, beginImGui, endImGui } from "./util";
