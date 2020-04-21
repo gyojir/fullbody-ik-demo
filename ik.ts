@@ -136,8 +136,8 @@ export function setJointValues(joints: Joint[], values: number[]) {
  * @param constrains 
  */
 export function computeJacobian(joints: Joint[], values: number[], constrains: Constrain[]): math.Matrix {
-  // ヤコビアンは（関節角度ベクトル長 × 拘束数*次元）の行列
-  const jac = zeros(values.length, constrains.reduce((prev,curr)=>prev+ConstrainDim[curr.type], 0)).toArray() as number[][];
+  // ヤコビアンは（拘束数*次元 × 関節角度ベクトル長）の行列
+  const jac = zeros(constrains.reduce((prev,curr)=>prev+ConstrainDim[curr.type], 0), values.length).toArray() as number[][];
   
   let offset = 0;
 
@@ -176,9 +176,9 @@ export function computeJacobian(joints: Joint[], values: number[], constrains: C
           }
 
           const arr = tmp.toArray() as number[][];
-          jac[i][offset + 0] = arr[0][3];
-          jac[i][offset + 1] = arr[1][3];
-          jac[i][offset + 2] = arr[2][3];
+          jac[offset + 0][i] = arr[0][3];
+          jac[offset + 1][i] = arr[1][3];
+          jac[offset + 2][i] = arr[2][3];
           
       }
       // 向き拘束
@@ -189,9 +189,9 @@ export function computeJacobian(joints: Joint[], values: number[], constrains: C
 
         // 回転ジョイント
         if(joint.type === JointType.Revolution) {
-          jac[i][offset + 0] = axis[0];
-          jac[i][offset + 1] = axis[1];
-          jac[i][offset + 2] = axis[2];
+          jac[offset + 0][i] = axis[0];
+          jac[offset + 1][i] = axis[1];
+          jac[offset + 2][i] = axis[2];
         }
       }
       // 参照姿勢拘束
@@ -218,8 +218,8 @@ export function computeJacobian(joints: Joint[], values: number[], constrains: C
  * @param constrains 
  */
 export function computeJacobian2(joints: Joint[], values: number[], constrains: Constrain[]): math.Matrix {
-  // ヤコビアンは（関節角度ベクトル長 × 拘束数*次元）の行列
-  const jac = zeros(values.length, constrains.reduce((prev,curr)=>prev+ConstrainDim[curr.type], 0)).toArray() as number[][];
+  // ヤコビアンは（拘束数*次元 × 関節角度ベクトル長）の行列
+  const jac = zeros(constrains.reduce((prev,curr)=>prev+ConstrainDim[curr.type], 0), values.length).toArray() as number[][];
   
   let offset = 0;
   // 各拘束に対してヤコビアンを求める
@@ -243,15 +243,15 @@ export function computeJacobian2(joints: Joint[], values: number[], constrains: 
           const diff = math.subtract(jointPos, currentPos) as FArray3;
           const cross = math.cross(axis, diff) as FArray3;
     
-          jac[i][offset + 0] = cross[0];
-          jac[i][offset + 1] = cross[1];
-          jac[i][offset + 2] = cross[2];
+          jac[offset + 0][i] = cross[0];
+          jac[offset + 1][i] = cross[1];
+          jac[offset + 2][i] = cross[2];
         }
         // スライダジョイント
         else if(joint.type === JointType.Slide) {
-          jac[i][offset + 0] = axis[0];
-          jac[i][offset + 1] = axis[1];
-          jac[i][offset + 2] = axis[2];
+          jac[offset + 0][i] = axis[0];
+          jac[offset + 1][i] = axis[1];
+          jac[offset + 2][i] = axis[2];
         }
       }
       // 向き拘束
@@ -259,9 +259,9 @@ export function computeJacobian2(joints: Joint[], values: number[], constrains: 
               constrain.type === ConstrainType.OrientationBound){
         // 回転ジョイント
         if(joint.type === JointType.Revolution) {
-          jac[i][offset + 0] = axis[0];
-          jac[i][offset + 1] = axis[1];
-          jac[i][offset + 2] = axis[2];
+          jac[offset + 0][i] = axis[0];
+          jac[offset + 1][i] = axis[1];
+          jac[offset + 2][i] = axis[2];
         }
       }
       // 参照姿勢拘束
@@ -286,8 +286,8 @@ export function computeJacobian2(joints: Joint[], values: number[], constrains: 
  */
 export function computePseudoInverse(jac: math.Matrix): math.Matrix {
   const jacT = math.transpose(jac);
-  // (J^T * J)^-1 * J^T
-  return math.multiply(inv(math.multiply(jacT, jac)), jacT);
+  // J^T * (J * J^T)^-1
+  return mul(jacT, inv(mul(jac, jacT)));
 }
 
 /**
@@ -297,8 +297,8 @@ export function computePseudoInverse(jac: math.Matrix): math.Matrix {
 export function computeSRInverse(jac: math.Matrix): math.Matrix {
   const jacT = math.transpose(jac);
   const k = 0.1; // テキトー
-  // (J^T * J + λI)^-1 * J^T
-  return math.multiply(inv(add(mul(jacT, jac), mul(k, math.identity(jac.size()[1])))), jacT);
+  // J^T * (J * J^T + λI)^-1
+  return mul(jacT, inv(add(mul(jac, jacT), mul(k, math.identity(jac.size()[0])))));
 }
 
 /**
@@ -309,8 +309,8 @@ export function computeSRInverse(jac: math.Matrix): math.Matrix {
 export function computeWeightedPseudoInverse(jac: math.Matrix, weight: math.Matrix): math.Matrix {
   const jacT = math.transpose(jac);
   const WI = inv(math.matrix(weight));
-  // (J^T * W^-1 * J)^-1 * J^T * W^-1
-  return mul(inv(mul(jacT, WI, jac)), jacT, WI)
+  // J^T * W^-1 * (J * J^T * W^-1)^-1
+  return mul(jacT, WI, inv(mul(jac, jacT, WI)))
 }
 
 /**
@@ -320,7 +320,7 @@ export function computeWeightedPseudoInverse(jac: math.Matrix, weight: math.Matr
  * @param jacPI 
  */
 export function computeRedundantCoefficients(eta: number[], jac: math.Matrix, jacPI: math.Matrix): number[] {
-  // vRC = eta - eta * J * J^+
+  // vRC = eta - eta * J * J#
   return math.subtract(eta, mul(eta, jac, jacPI)) as number[];
 }
 
@@ -361,12 +361,12 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
     // ヤコビアンの擬似逆行列
     const jacPI = computeSRInverse(jac)
     // 目標ジョイント変位×擬似逆行列
-    // Δq = Δp * J^+
-    // Δθ_diff = (Δp - Δθref*J) * J^+  (バイアス付き最小ノルム解の場合)
-    // const dq0 = mul(math.flatten(diffs), jacPI).toArray();
-    const dq0 = mul(math.subtract(math.flatten(diffs), mul(diff_ref, jac)), jacPI).toArray() as number[];
-    // W = (I-JJ^+) 冗長項
-    const w = math.subtract(math.identity(joints.length), mul(jac,jacPI)) as math.Matrix;
+    // Δq = J# * Δp
+    // Δθ_diff = J# * (Δp - J*Δθref) (バイアス付き最小ノルム解の場合)
+    // const dq0 = mul(jacPI, math.flatten(diffs)).toArray();
+    const dq0 = mul(jacPI, math.subtract(math.flatten(diffs), mul(jac, diff_ref))).toArray() as number[];
+    // W = (I-J#J) 冗長項
+    const w = math.subtract(math.identity(joints.length), mul(jacPI, jac)) as math.Matrix;
 
     // console.log(math.flatten(diffs), mul(diff_ref, jac).toArray())
     return [dq0, w];
@@ -380,12 +380,12 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
 
     // ヤコビアンの計算
     const jac_aux = computeJacobian2(joints, values, constrains);
-    // S = W*Jaux
-    const s = mul(w, jac_aux);
+    // S = Jaux*W
+    const s = mul(jac_aux, w);
     // S* = SR Invers of S
     const sSI = computeSRInverse(s);
-    // y = (paux - Δq0*Jaux)*(S*)
-    const y = mul(math.subtract(math.flatten(diffs), mul(dq0,jac_aux)), sSI);
+    // y = (S*)*(paux - Jaux*Δq0)
+    const y = mul(sSI, math.subtract(math.flatten(diffs), mul(jac_aux, dq0)));
 
     // Δq = Δq0 + yW
     return add(dq0, mul(y,w)).toArray() as number[];
@@ -421,11 +421,11 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
 
 /**
  * ヤコビアンIK計算
- * @param joints 
- * @param constrains 
- * @param max_iteration 
- * @param step 
- * @param ref_diff 
+ * @param joints ジョイント配列
+ * @param constrains 拘束配列
+ * @param max_iteration 最大イテレーション回数
+ * @param step ステップサイズ
+ * @param ref_diff 参照姿勢速度
  */
 export function solve_jacobian_ik(joints: Joint[], constrains: Constrain[], max_iteration = 1, step = 0.05, ref_diff = zeros(joints.length).toArray() as number[]): number[] {
   let min_dist = Number.MAX_VALUE;
