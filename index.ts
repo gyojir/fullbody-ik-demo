@@ -402,7 +402,7 @@ function updateIk(delta: number): void {
   // 拘束にジョイント番号を入れておく
   const converted_constrains = [
     ...constrains.map(e=> ({...e,　joint: convertBoneToJointIndex(joints, e.bone)})),
-    // ...ref_diff.map((e,i)=> ({priority: 0, joint: i, value: e, type: ConstrainType.RefPose})).filter((e,i)=>i<30)
+    // ...ref_diff.map((e,i)=> ({priority: 0, joint: i, value: e, type: ConstrainType.RefPose})).filter((e,i)=>i<30) // 拘束による参照姿勢追随
   ];
   
   // スケルトンアニメーション更新
@@ -452,6 +452,15 @@ function draw_imgui(time: number): void {
   ImGui.Begin("Debug Window");
   ImGui.Dummy(new ImGui.ImVec2(400,0));
   
+  // 稼働ルート
+  if(bones.length){
+    ImGui.Checkbox(`slide root`, (value = bones[0].slide || false) => {
+      bones[0].slide = value;
+      bones[0].static = !value;
+      return  value;
+    })
+  }
+
   // アニメーション
   actions.forEach((action,i) => {
     ImGui.SliderFloat(`${action.getClip().name} weight`,  (value = action.getEffectiveWeight()) => setAnimWeight(action, value), 0, 1);
