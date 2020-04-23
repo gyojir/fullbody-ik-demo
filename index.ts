@@ -18,6 +18,7 @@ let renderer : THREE.WebGLRenderer | undefined;
 let model : THREE.Object3D | undefined;
 let animation_compute_model : THREE.Object3D | undefined;
 let skeleton : THREE.SkeletonHelper | undefined;
+let animation_compute_skeleton : THREE.SkeletonHelper | undefined;
 let mixer : THREE.AnimationMixer | undefined;
 var actions : THREE.AnimationAction[] = [];
 let clock : THREE.Clock | undefined;
@@ -26,6 +27,7 @@ const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 
 const settings = {
   animation: true,
+  debugDisp: false,
 };
 
 const bones : Bone[] = [];
@@ -354,9 +356,9 @@ function initScene() {
     skeleton.visible = true;
     scene.add( skeleton );
 
-    let skeleton_2 = new THREE.SkeletonHelper( animation_compute_model );
-    skeleton_2.visible = true;
-    scene.add( skeleton_2 );
+    animation_compute_skeleton = new THREE.SkeletonHelper( animation_compute_model );
+    animation_compute_skeleton.visible = true;
+    scene.add( animation_compute_skeleton );
   } );
 
   // -----------------------------------------
@@ -467,8 +469,14 @@ function draw_imgui(time: number): void {
         return  value;
       })
     }
-    // アニメ有効
+    // フラグ
     ImGui.Checkbox(`enable animation`, (value = settings.animation) => settings.animation = value);
+    ImGui.Checkbox(`enable debug display`, (value = settings.debugDisp) => settings.debugDisp = value)
+    {
+      constrains.forEach(e=> e.object && (e.object.visible = settings.debugDisp));
+      skeleton && (skeleton.visible = settings.debugDisp);
+      animation_compute_skeleton && (animation_compute_skeleton.visible = settings.debugDisp);
+    }
 
     ImGui.TreePop();
   }
@@ -515,24 +523,27 @@ function draw_imgui(time: number): void {
       const joint = convertBoneToJointIndex(joints, constrain.bone);
       const pos = getJointWorldPosition(joints, joint);
 
+      ImGui.PushID(i);
       ImGui.Text(`${ConstrainName[constrain.type]}`);
 
-      if(ImGui.Checkbox(`enable##${i}`, (value = constrain.enable) => constrain.enable = value)){
+      if(ImGui.Checkbox(`enable`, (value = constrain.enable) => constrain.enable = value)){
         constrain.object && (constrain.object.visible = constrain.enable);
         constrain.control && (constrain.control.enabled = constrain.enable);
       }
 
+      ImGui.Combo(`priority`,  (value = constrain.priority) => constrain.priority = value, ["Low", "High"], 2);
+
       if(constrain.type === ConstrainType.Position){
-        ImGui.SliderFloat3(`constrain pos##${i}`, constrain.pos || [0,0,0], -2, 2)
-        ImGui.SliderFloat3(`current##${i}`, pos, -100, 100);
+        ImGui.SliderFloat3(`constrain pos`, constrain.pos || [0,0,0], -2, 2)
+        ImGui.SliderFloat3(`current`, pos, -100, 100);
         if(constrain.object){
           constrain.object.position.set(...constrain.pos || [0,0,0]);
         }
       }
       else if(constrain.type === ConstrainType.Orientation){
         const rot = getJointOrientation(joints, joint);
-        SliderAngleFloat3(`constrain rot##${i}`, constrain.rot || [0,0,0], -180, 180)
-        SliderAngleFloat3(`current##${i}`, rot, -180, 180);
+        SliderAngleFloat3(`constrain rot`, constrain.rot || [0,0,0], -180, 180)
+        SliderAngleFloat3(`current`, rot, -180, 180);
         if(constrain.object){
           constrain.object.rotation.set(...constrain.rot || [0,0,0]);  
           constrain.object.position.set(...pos);
@@ -543,8 +554,8 @@ function draw_imgui(time: number): void {
           const parentBone = bones[constrain.bone].parentIndex;
           const parent = parentBone != -1 ? getJointWorldMatrix(joints, convertBoneToJointIndex(joints,parentBone)) : math.identity(4);
           const rot = getJointOrientation(joints, joint);
-          SliderAngleFloat3(`constrain rot bound##${i}`, constrain.base_rot || [0,0,0], -180, 180)
-          SliderAngleFloat3(`current##${i}`, rot, -180, 180);
+          SliderAngleFloat3(`constrain rot bound`, constrain.base_rot || [0,0,0], -180, 180)
+          SliderAngleFloat3(`current`, rot, -180, 180);
           if(constrain.object){
             constrain.object.rotation.set(...getRotationXYZ(mul(parent, rotXYZ(...constrain.base_rot || [0,0,0]))));  
             constrain.object.position.set(...pos);
@@ -552,6 +563,7 @@ function draw_imgui(time: number): void {
         }
       }
       ImGui.Separator();
+      ImGui.PopID();
     });
 
     ImGui.TreePop();
