@@ -12,7 +12,7 @@
         "allowJs": true
     },
     "include": [
-        ".",
+        "src",
         "node_modules/imgui"
     ],
     "exclude": [

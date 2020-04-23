@@ -1,5 +1,5 @@
 import {toBeDeepCloseTo,toMatchCloseTo} from 'jest-matcher-deep-close-to';
-import * as mutil from '../math-util';
+import * as mutil from '../src/math-util';
 import * as math from "mathjs";
 
 expect.extend({toBeDeepCloseTo, toMatchCloseTo});

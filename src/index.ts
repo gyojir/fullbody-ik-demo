@@ -10,7 +10,7 @@ import { existFilter, rotWrap, SliderAngleFloat3, initImGui, endImGui, beginImGu
 import { Joint, ConstrainType, JointType, FArray3, Bone, Constrain, ConstrainName, Priority, PriorityName } from './def';
 import * as ImGui from 'imgui-js/imgui.js';
 
-const modelfile = require('./models/Soldier.glb');
+const modelfile = require('../models/Soldier.glb');
 
 let camera : THREE.PerspectiveCamera | undefined;
 let scene : THREE.Scene | undefined;
