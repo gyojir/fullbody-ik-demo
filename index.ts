@@ -32,9 +32,9 @@ const settings = {
 
 const bones : Bone[] = [];
 const constrains: Constrain[] = [
-  {priority: 1, bone: 15, joint: -1, pos: [0.5,1,0], object: undefined, type: ConstrainType.Position, enable: true},
-  {priority: 1, bone: 15, joint: -1, rot: [0.5,1,0], object: undefined, type: ConstrainType.Orientation, enable: true},
-  {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: undefined, type: ConstrainType.Position, enable: true},
+  {priority: 1, bone: 15, joint: -1, pos: [0.5,1.5,0], object: undefined, type: ConstrainType.Position, enable: true},
+  {priority: 1, bone: 15, joint: -1, rot: [-0.5,-0.2,-0.2], object: undefined, type: ConstrainType.Orientation, enable: true},
+  {priority: 1, bone: 11, joint: -1, pos: [-0.5,1.5,0], object: undefined, type: ConstrainType.Position, enable: true},
   {priority: 0, bone: 6, joint: -1, base_rot: [0,0,0], bounds: { gamma_max: Math.PI/4}, object: undefined, type: ConstrainType.OrientationBound, enable: true},
 ];
 
@@ -251,7 +251,7 @@ function initScene() {
     }
 
     const geometry =
-      constrain.type === ConstrainType.Position ? new THREE.SphereGeometry(0.1) :
+      constrain.type === ConstrainType.Position ? new THREE.SphereGeometry(0.05) :
       constrain.type === ConstrainType.Orientation ? new THREE.CylinderGeometry(0, 0.05, 0.3) :
       constrain.type === ConstrainType.OrientationBound ? new THREE.CylinderGeometry(0.1, 0, 0.2) : undefined;
     if(geometry === undefined){
