@@ -101,7 +101,7 @@ export function getJointWorldMatrix(joints: Joint[], i: number): math.Matrix {
 export function getJointWorldPosition(joints: Joint[], i: number): FArray3 {
   // 先端の座標系から根元の座標系に変換
   // Max0 * Max1 * Mat2 * Mat3 * [0,0,0,1]
-  const tmp = getJointWorldMatrix(joints, i).toArray() as number[][];
+  const tmp = getJointWorldMatrix(joints, i).valueOf() as number[][];
   return [tmp[0][3], tmp[1][3], tmp[2][3]];
 }
 
@@ -137,7 +137,7 @@ export function setJointValues(joints: Joint[], values: number[]) {
  */
 export function computeJacobian(joints: Joint[], values: number[], constrains: Constrain[]): math.Matrix {
   // ヤコビアンは（拘束数*次元 × 関節角度ベクトル長）の行列
-  const jac = zeros(constrains.reduce((prev,curr)=>prev+ConstrainDim[curr.type], 0), values.length).toArray() as number[][];
+  const jac = zeros(constrains.reduce((prev,curr)=>prev+ConstrainDim[curr.type], 0), values.length).valueOf() as number[][];
   
   let offset = 0;
 
@@ -175,7 +175,7 @@ export function computeJacobian(joints: Joint[], values: number[], constrains: C
             tmp = mul(translate(...tmp_joint.offset), mat(value), scale(...tmp_joint.scale), tmp);
           }
 
-          const arr = tmp.toArray() as number[][];
+          const arr = tmp.valueOf() as number[][];
           jac[offset + 0][i] = arr[0][3];
           jac[offset + 1][i] = arr[1][3];
           jac[offset + 2][i] = arr[2][3];
@@ -219,7 +219,7 @@ export function computeJacobian(joints: Joint[], values: number[], constrains: C
  */
 export function computeJacobian2(joints: Joint[], values: number[], constrains: Constrain[]): math.Matrix {
   // ヤコビアンは（拘束数*次元 × 関節角度ベクトル長）の行列
-  const jac = zeros(constrains.reduce((prev,curr)=>prev+ConstrainDim[curr.type], 0), values.length).toArray() as number[][];
+  const jac = zeros(constrains.reduce((prev,curr)=>prev+ConstrainDim[curr.type], 0), values.length).valueOf() as number[][];
   
   let offset = 0;
   // 各拘束に対してヤコビアンを求める
@@ -351,7 +351,7 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
   // 高優先度タスク
   const computeHighPriorityTask = (diffs: Diff[], constrains: Constrain[]): [number[], math.Matrix] =>{
     if(!diffs.length || !constrains.length){
-      return [zeros(joints.length).toArray() as number[], math.identity(joints.length) as math.Matrix];
+      return [zeros(joints.length).valueOf() as number[], math.identity(joints.length) as math.Matrix];
     }
 
     // 加重行列を単位行列で初期化
@@ -363,12 +363,12 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
     // 目標ジョイント変位×擬似逆行列
     // Δq = J# * Δp
     // Δθ_diff = J# * (Δp - J*Δθref) (バイアス付き最小ノルム解の場合)
-    // const dq0 = mul(jacPI, math.flatten(diffs)).toArray();
-    const dq0 = mul(jacPI, math.subtract(math.flatten(diffs), mul(jac, diff_ref))).toArray() as number[];
+    // const dq0 = mul(jacPI, math.flatten(diffs)).valueOf();
+    const dq0 = mul(jacPI, math.subtract(math.flatten(diffs), mul(jac, diff_ref))).valueOf() as number[];
     // W = (I-J#J) 冗長項
     const w = math.subtract(math.identity(joints.length), mul(jacPI, jac)) as math.Matrix;
 
-    // console.log(math.flatten(diffs), mul(diff_ref, jac).toArray())
+    // console.log(math.flatten(diffs), mul(diff_ref, jac).valueOf())
     return [dq0, w];
   }
 
@@ -388,7 +388,7 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
     const y = mul(sSI, math.subtract(math.flatten(diffs), mul(jac_aux, dq0)));
 
     // Δq = Δq0 + yW
-    return add(dq0, mul(y,w)).toArray() as number[];
+    return add(dq0, mul(y,w)).valueOf() as number[];
   }
   
   // 優先度順にタスク実行
@@ -401,7 +401,7 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
 
   // // 冗長変数etaを使って可動範囲を超えた場合に元に戻すように角変位を与える
   // // ↑参考 http://sssiii.seesaa.net/article/383711810.html
-  // let eta = math.zeros(joints.length).toArray() // ゼロクリア
+  // let eta = math.zeros(joints.length).valueOf() // ゼロクリア
   // joints.forEach((joint, i) => {
   //   if(joint.type === JointType.Revolution){
   //     if (values[i] > joint.angle_range[1] * DEG_TO_RAD) { // 最小値より小さければ戻す
@@ -412,7 +412,7 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
   //   }
   // });
   // // 冗長項の計算   
-  // const rc = computeRedundantCoefficients(eta, jac, jacPI).toArray();
+  // const rc = computeRedundantCoefficients(eta, jac, jacPI).valueOf();
   // 冗長項を関節角度ベクトルに加える
   // values = math.add(values, rc);    
 
@@ -427,7 +427,7 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
  * @param step ステップサイズ
  * @param ref_diff 参照姿勢速度
  */
-export function solve_jacobian_ik(joints: Joint[], constrains: Constrain[], max_iteration = 1, step = 0.05, ref_diff = zeros(joints.length).toArray() as number[]): number[] {
+export function solve_jacobian_ik(joints: Joint[], constrains: Constrain[], max_iteration = 1, step = 0.05, ref_diff = zeros(joints.length).valueOf() as number[]): number[] {
   let min_dist = Number.MAX_VALUE;
   let min_ref_diff = Number.MAX_VALUE;
   let best_values = joints.map(e=>e.value);
@@ -465,7 +465,7 @@ export function solve_jacobian_ik(joints: Joint[], constrains: Constrain[], max_
         const curr = getJointWorldMatrix(joints, e.joint);
         const target = rotXYZ(...e.rot || [0,0,0]);
         const err = getRotationError(target, curr);
-        return mul(math.resize(curr,[3,3]),err).toArray() as FArray3;
+        return mul(math.resize(curr,[3,3]),err).valueOf() as FArray3;
       }
       // 向き範囲制限拘束
       else if(e.type === ConstrainType.OrientationBound){
@@ -476,7 +476,7 @@ export function solve_jacobian_ik(joints: Joint[], constrains: Constrain[], max_
         if(e.bounds && gamma > e.bounds.gamma_max){
           const world = math.resize(getJointWorldMatrix(joints, e.joint),[3,3]);
           const err = getRotationError(target, curr);
-          return mul(world, err).toArray() as FArray3;
+          return mul(world, err).valueOf() as FArray3;
         }
       }
       if(e.type === ConstrainType.RefPose){
