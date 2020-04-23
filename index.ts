@@ -7,7 +7,7 @@ import * as math from "mathjs";
 import { getJointOrientation, getJointWorldMatrix, solveJacobianIk, getJointWorldPosition } from './ik';
 import { mul, rotXYZ, getRotationXYZ, identity, cancelScaling, cancelTranslate }from './math-util';
 import { existFilter, rotWrap, SliderAngleFloat3, initImGui, endImGui, beginImGui } from "./util";
-import { Joint, ConstrainType, JointType, FArray3, Bone, Constrain, ConstrainName } from './def';
+import { Joint, ConstrainType, JointType, FArray3, Bone, Constrain, ConstrainName, Priority, PriorityName } from './def';
 import * as ImGui from 'imgui-js/imgui.js';
 
 const modelfile = require('./models/Soldier.glb');
@@ -32,10 +32,10 @@ const settings = {
 
 const bones : Bone[] = [];
 const constrains: Constrain[] = [
-  {priority: 1, bone: 15, joint: -1, pos: [0.5,1.5,0], object: undefined, type: ConstrainType.Position, enable: true},
-  {priority: 1, bone: 15, joint: -1, rot: [-0.5,-0.2,-0.2], object: undefined, type: ConstrainType.Orientation, enable: true},
-  {priority: 1, bone: 11, joint: -1, pos: [-0.5,1.5,0], object: undefined, type: ConstrainType.Position, enable: true},
-  {priority: 0, bone: 6, joint: -1, base_rot: [0,0,0], bounds: { gamma_max: Math.PI/4}, object: undefined, type: ConstrainType.OrientationBound, enable: true},
+  {priority: Priority.High, bone: 15, joint: -1, pos: [0.5,1.5,0], object: undefined, type: ConstrainType.Position, enable: true},
+  {priority: Priority.High, bone: 15, joint: -1, rot: [-0.5,-0.2,-0.2], object: undefined, type: ConstrainType.Orientation, enable: true},
+  {priority: Priority.High, bone: 11, joint: -1, pos: [-0.5,1.5,0], object: undefined, type: ConstrainType.Position, enable: true},
+  {priority: Priority.Low, bone: 6, joint: -1, base_rot: [0,0,0], bounds: { gamma_max: Math.PI/4}, object: undefined, type: ConstrainType.OrientationBound, enable: true},
 ];
 
 /*
@@ -531,7 +531,7 @@ function drawImgui(time: number): void {
         constrain.control && (constrain.control.enabled = constrain.enable);
       }
 
-      ImGui.Combo(`priority`,  (value = constrain.priority) => constrain.priority = value, ["Low", "High"], 2);
+      ImGui.Combo(`priority`,  (value = constrain.priority) => constrain.priority = value, PriorityName, 2);
 
       if(constrain.type === ConstrainType.Position){
         ImGui.SliderFloat3(`constrain pos`, constrain.pos || [0,0,0], -2, 2)

@@ -22,7 +22,7 @@ import {
   getSwapMatrix,
   getRotationXYZ
 } from "./math-util";
-import { FArray3, Constrain, Joint, JointType, ConstrainType, ConstrainDim } from "./def";
+import { FArray3, Constrain, Joint, JointType, ConstrainType, ConstrainDim, Priority } from "./def";
 
 type Diff = number[]
 
@@ -343,7 +343,7 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
   // 優先度でdiffとconstrainsを分解
   const prioritized: Tasks = [{diffs: [], constrains: []},{diffs: [], constrains: []}];
   zip(_diffs, _constrains).forEach(([diff,constrain])=>{
-    const p = constrain.priority > 0 ? 0 : 1;
+    const p = constrain.priority === Priority.High ? 0 : 1;
     prioritized[p].constrains.push(constrain);
     prioritized[p].diffs.push(diff);
   });

@@ -30,7 +30,7 @@ export type Joint = {
 };
 
 export type Constrain = {
-  priority: number;
+  priority: Priority;
   bone: number;
   joint: number;
   pos?: FArray3;
@@ -71,3 +71,13 @@ export enum JointType {
   Slide,
   Static,
 };
+
+export enum Priority {
+  Low,
+  High
+};
+
+export const PriorityName = [
+  "Low",
+  "High"
+]
