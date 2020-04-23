@@ -4,7 +4,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as math from "mathjs";
-import { getJointOrientation, getJointWorldMatrix, solve_jacobian_ik, getJointWorldPosition } from './ik';
+import { getJointOrientation, getJointWorldMatrix, solveJacobianIk, getJointWorldPosition } from './ik';
 import { mul, rotXYZ, getRotationXYZ, identity, cancelScaling, cancelTranslate }from './math-util';
 import { existFilter, rotWrap, SliderAngleFloat3, initImGui, endImGui, beginImGui } from "./util";
 import { Joint, ConstrainType, JointType, FArray3, Bone, Constrain } from './def';
@@ -430,7 +430,7 @@ function updateIk(delta: number): void {
   });
 
   // ik計算
-  solve_jacobian_ik(joints, converted_constrains, 8, 1/8, ref_diff);
+  solveJacobianIk(joints, converted_constrains, 8, 1/8, ref_diff);
 
   // joints -> bones
   applyJointsToBones(joints, bones);

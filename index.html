@@ -6,9 +6,40 @@
 		<style>
 			body { margin: 0; }
 			canvas { display: block; }
+
+			a {
+				color: #ff0;
+				text-decoration: none;
+			}
+
+			a:hover {
+				text-decoration: underline;
+			}
+
+			a {
+				color: #f00;
+			}
+			#info {
+				position: absolute;
+				top: 0px;
+				width: 100%;
+				padding: 10px;
+				box-sizing: border-box;
+				text-align: center;
+				-moz-user-select: none;
+				-webkit-user-select: none;
+				-ms-user-select: none;
+				user-select: none;
+				z-index: 3; /* TODO Solve this in HTML */
+			}
 		</style>
 	</head>
 	<body>
+		<div id="info">
+			<a href="https://gyojir.com" target="_blank" rel="noopener">gyojir.com</a> - fullbody ik demo
+			(model from <a href="https://www.mixamo.com/" target="_blank" rel="noopener">mixamo.com</a>)<br/>
+			<a href="https://gyojir.com" target="_blank" rel="noopener">source code</a>
+		</div>
 		<canvas id="canvas"></canvas>
 		<script src="index.ts"></script>
 	</body>

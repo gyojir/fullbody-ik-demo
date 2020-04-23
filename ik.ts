@@ -400,7 +400,7 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
   values = add(values, dq, diff_ref);
 
   // // 冗長変数etaを使って可動範囲を超えた場合に元に戻すように角変位を与える
-  // // ↑参考 http://sssiii.seesaa.net/article/383711810.html
+  // // ↑参考 (三谷純 他 共著，「Computer Graphics Gems JP 2012」，ボーンデジタル，2012)
   // let eta = math.zeros(joints.length).valueOf() // ゼロクリア
   // joints.forEach((joint, i) => {
   //   if(joint.type === JointType.Revolution){
@@ -427,7 +427,7 @@ export function calcJacobianTask(joints: Joint[], _values: number[], _diffs: Dif
  * @param step ステップサイズ
  * @param ref_diff 参照姿勢速度
  */
-export function solve_jacobian_ik(joints: Joint[], constrains: Constrain[], max_iteration = 1, step = 0.05, ref_diff = zeros(joints.length).valueOf() as number[]): number[] {
+export function solveJacobianIk(joints: Joint[], constrains: Constrain[], max_iteration = 1, step = 0.05, ref_diff = zeros(joints.length).valueOf() as number[]): number[] {
   let min_dist = Number.MAX_VALUE;
   let min_ref_diff = Number.MAX_VALUE;
   let best_values = joints.map(e=>e.value);
