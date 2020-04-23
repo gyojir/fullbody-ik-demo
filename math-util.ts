@@ -133,6 +133,7 @@ export function expandToMatrix44(mat: math.Matrix): math.Matrix{
 
 /**
  * 回転行列の誤差ベクトル A - B
+ * 長さ=sinθ, 方向=回転軸 のベクトル
  * @param matA 
  * @param matB 
  */
@@ -165,10 +166,12 @@ export function getRotationFromAxis(axis: FArray3, rad: number): math.Matrix{
 
 /**
  * 回転行列から、x軸に直行する回転軸a と 回転後の軸xまわりの回転量を取り出す
+ * aの長さはsin(γ/2)
  * y軸を基準にしたい場合はgetSwapMatrix(2,1,0)とする(x,y,z)->(z,x,y)
  * @param rot 
  * @param base 
  * @param swap 
+ * @returns [ay, az, twist, gamma]
  */
 export function getRotationSpherical(rot: math.Matrix, base = identity(4), swap = identity(4)){
   // ベースから見た回転

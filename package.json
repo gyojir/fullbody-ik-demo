@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "parcel index.html",
+    "test": "jest",
     "test:watch": "jest --watch"
   },
   "author": "",
