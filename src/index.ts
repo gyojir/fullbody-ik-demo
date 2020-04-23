@@ -33,9 +33,9 @@ const settings = {
 const bones : Bone[] = [];
 const constrains: Constrain[] = [
   {priority: Priority.High, bone: 15, joint: -1, pos: [0.5,1.5,0], object: undefined, type: ConstrainType.Position, enable: true},
-  {priority: Priority.High, bone: 15, joint: -1, rot: [-0.5,-0.2,-0.2], object: undefined, type: ConstrainType.Orientation, enable: true},
-  {priority: Priority.High, bone: 11, joint: -1, pos: [-0.5,1.5,0], object: undefined, type: ConstrainType.Position, enable: true},
-  {priority: Priority.Low, bone: 6, joint: -1, base_rot: [0,0,0], bounds: { gamma_max: Math.PI/4}, object: undefined, type: ConstrainType.OrientationBound, enable: true},
+  {priority: Priority.High, bone: 15, joint: -1, rot: [-0.5,-0.2,-0.2], object: undefined, type: ConstrainType.Orientation, enable: false},
+  {priority: Priority.High, bone: 11, joint: -1, pos: [-0.5,1.5,0], object: undefined, type: ConstrainType.Position, enable: false},
+  {priority: Priority.Low, bone: 6, joint: -1, base_rot: [0,0,0], bounds: { gamma_max: Math.PI/4}, object: undefined, type: ConstrainType.OrientationBound, enable: false},
 ];
 
 /*
