@@ -1,6 +1,6 @@
 import * as math from "mathjs";
-const ImGui_Impl = require("imgui-js/dist/imgui_impl.umd");
-const ImGui = ImGui_Impl.ImGui;
+import * as ImGui from './node_modules/imgui-js/imgui.js';
+import * as ImGui_Impl from './node_modules/imgui-js/example/imgui_impl.js';
 
 export const existFilter = <T>(x: T|undefined|null): x is T => x !== null || x !== undefined;
 
@@ -33,17 +33,38 @@ export function SliderAngleFloat3(label: string, v_rad: number[], v_degrees_min 
 }
 
 /**
- * ImGuiフレーム表示開始
- * @param delta デルタ時間
+ * ImGui初期化
  */
-export function beginImGui(delta: number){
-  ImGui_Impl.NewFrame(delta);
+export async function initImGui(canvas: HTMLCanvasElement) {
+  await ImGui.default();
+  ImGui.IMGUI_CHECKVERSION();
+  ImGui.CreateContext();
+  ImGui_Impl.Init(canvas);
+
+  canvas.addEventListener( 'mousedown', event=>{
+    // 逆っぽいけど
+    if(!ImGui.IsWindowHovered()){
+      event.stopImmediatePropagation();
+    }
+  }, false );
+  canvas.addEventListener( 'touchstart', event=>{
+    if(!ImGui.IsWindowHovered()){
+      event.stopImmediatePropagation();
+    }
+  }, false );
+}
+
+/**
+ * ImGuiフレーム表示開始
+ * @param time 時間
+ */
+export function beginImGui(time: number){
+  ImGui_Impl.NewFrame(time);
   ImGui.NewFrame();
 }
 
 /**
  * ImGuiフレーム表示終了
- * @param delta デルタ時間
  */
 export function endImGui(){
   ImGui.EndFrame();
