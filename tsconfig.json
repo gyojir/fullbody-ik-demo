@@ -13,9 +13,10 @@
     },
     "include": [
         ".",
-        "./node_modules/imgui"
+        "node_modules/imgui"
     ],
     "exclude": [
-        "__tests__"
+        "__tests__",
+        "dist"
     ]
 }
