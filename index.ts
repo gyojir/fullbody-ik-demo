@@ -8,8 +8,7 @@ import { getJointOrientation, getJointWorldMatrix, solve_jacobian_ik, getJointWo
 import { mul, rotXYZ, getRotationXYZ, identity, cancelScaling, cancelTranslate }from './math-util';
 import { existFilter, rotWrap, SliderAngleFloat3, initImGui, endImGui, beginImGui } from "./util";
 import { Joint, ConstrainType, JointType, FArray3, Bone, Constrain } from './def';
-import * as ImGui from './node_modules/imgui-js/imgui.js';
-import * as ImGui_Impl from './node_modules/imgui-js/example/imgui_impl.js';
+import * as ImGui from 'imgui-js/imgui.js';
 
 const modelfile = require('./models/Soldier.glb');
 

@@ -1,6 +1,6 @@
 import * as math from "mathjs";
-import * as ImGui from './node_modules/imgui-js/imgui.js';
-import * as ImGui_Impl from './node_modules/imgui-js/example/imgui_impl.js';
+import * as ImGui from 'imgui-js/imgui.js';
+import * as ImGui_Impl from 'imgui-js/example/imgui_impl.js';
 
 export const existFilter = <T>(x: T|undefined|null): x is T => x !== null || x !== undefined;
 
