@@ -7,7 +7,7 @@ import * as math from "mathjs";
 import { getJointOrientation, getJointWorldMatrix, solveJacobianIk, getJointWorldPosition } from './ik';
 import { mul, rotXYZ, getRotationXYZ, identity, cancelScaling, cancelTranslate }from './math-util';
 import { existFilter, rotWrap, SliderAngleFloat3, initImGui, endImGui, beginImGui } from "./util";
-import { Joint, ConstrainType, JointType, FArray3, Bone, Constrain } from './def';
+import { Joint, ConstrainType, JointType, FArray3, Bone, Constrain, ConstrainName } from './def';
 import * as ImGui from 'imgui-js/imgui.js';
 
 const modelfile = require('./models/Soldier.glb');
@@ -24,11 +24,16 @@ let clock : THREE.Clock | undefined;
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 
+const settings = {
+  animation: true,
+};
+
 const bones : Bone[] = [];
 const constrains: Constrain[] = [
   {priority: 1, bone: 15, joint: -1, pos: [0.5,1,0], object: undefined, type: ConstrainType.Position, enable: true},
   {priority: 1, bone: 15, joint: -1, rot: [0.5,1,0], object: undefined, type: ConstrainType.Orientation, enable: true},
   {priority: 1, bone: 11, joint: -1, pos: [-0.5,1,0], object: undefined, type: ConstrainType.Position, enable: true},
+  {priority: 0, bone: 6, joint: -1, base_rot: [0,0,0], bounds: { gamma_max: Math.PI/4}, object: undefined, type: ConstrainType.OrientationBound, enable: true},
 ];
 
 /*
@@ -250,8 +255,7 @@ function initScene() {
     if(geometry === undefined){
       return;
     }
-
-    const material = new THREE.MeshStandardMaterial({color: 0xFFFFFF, wireframe: true});    
+    const material = new THREE.MeshStandardMaterial({color: 0xFFFFFF, wireframe: true, depthTest: false});    
     constrain.object = new THREE.Mesh(geometry, material);
     if(constrain.type === ConstrainType.Position){
       constrain.object.position.set(...constrain.pos || [0,0,0]);
@@ -260,6 +264,7 @@ function initScene() {
     }else if(constrain.type === ConstrainType.OrientationBound){
       constrain.object.rotation.set(...constrain.base_rot || [0,0,0]);
     }
+    constrain.object.renderOrder = 999; // always display
     scene.add(constrain.object);
     
     // 掴んで移動
@@ -406,7 +411,7 @@ function updateIk(delta: number): void {
   ];
   
   // スケルトンアニメーション更新
-  mixer && mixer.update(delta);
+  settings.animation && mixer && mixer.update(delta);
   // 回転ジョイントに関しては、参照ポーズとの差分に対して解を求める。
   // Δθref = θref - θ
   const ref_diff = joints.map((joint,i)=> {
@@ -453,24 +458,36 @@ function draw_imgui(time: number): void {
   ImGui.Dummy(new ImGui.ImVec2(400,0));
   
   // 稼働ルート
-  if(bones.length){
-    ImGui.Checkbox(`slide root`, (value = bones[0].slide || false) => {
-      bones[0].slide = value;
-      bones[0].static = !value;
-      return  value;
-    })
+  if (ImGui.TreeNodeEx("flags##1", ImGui.ImGuiTreeNodeFlags.DefaultOpen))
+  {
+    if(bones.length){
+      ImGui.Checkbox(`slide root`, (value = bones[0].slide || false) => {
+        bones[0].slide = value;
+        bones[0].static = !value;
+        return  value;
+      })
+    }
+    // アニメ有効
+    ImGui.Checkbox(`enable animation`, (value = settings.animation) => settings.animation = value);
+
+    ImGui.TreePop();
   }
 
   // アニメーション
-  actions.forEach((action,i) => {
-    ImGui.SliderFloat(`${action.getClip().name} weight`,  (value = action.getEffectiveWeight()) => setAnimWeight(action, value), 0, 1);
-  })
-  
-  if(mixer !== undefined){
-    const _mixer = mixer;
-    ImGui.SliderFloat(`timeScale`,  (scale = _mixer.timeScale) => _mixer.timeScale = scale, 0, 5);
-  }
+  if (ImGui.TreeNodeEx("animations##1", ImGui.ImGuiTreeNodeFlags.DefaultOpen))
+  {
+    actions.forEach((action,i) => {
+      ImGui.SliderFloat(`${action.getClip().name} weight`,  (value = action.getEffectiveWeight()) => setAnimWeight(action, value), 0, 1);
+    })
 
+    if(mixer !== undefined){
+      const _mixer = mixer;
+      ImGui.SliderFloat(`timeScale`,  (scale = _mixer.timeScale) => _mixer.timeScale = scale, 0, 5);
+    }
+  
+    ImGui.TreePop();
+  }
+  
   // ボーンデバッグ表示
   if (ImGui.TreeNode("bones##1"))
   {
@@ -478,7 +495,13 @@ function draw_imgui(time: number): void {
       ImGui.SliderFloat3(`pos[${i}] ${e.object?.name}`, e.offset, -5, 5)
       SliderAngleFloat3(`rot[${i}] ${e.object?.name}`, e.rotation, -180, 180)
       ImGui.SliderFloat3(`scale[${i}] ${e.object?.name}`, e.scale, 0.001, 1)
+
+      // bones->model
+      e.object?.position.set(...e.offset);
+      e.object?.rotation.set(...e.rotation);
+      e.object?.scale.set(...e.scale);
     });
+    ImGui.TreePop();
   }
   ImGui.Separator();
   
@@ -492,40 +515,46 @@ function draw_imgui(time: number): void {
       const joint = convertBoneToJointIndex(joints, constrain.bone);
       const pos = getJointWorldPosition(joints, joint);
 
-      if(ImGui.Checkbox(`enable[${i}]`, (value = constrain.enable) => constrain.enable = value)){
+      ImGui.Text(`${ConstrainName[constrain.type]}`);
+
+      if(ImGui.Checkbox(`enable##${i}`, (value = constrain.enable) => constrain.enable = value)){
         constrain.object && (constrain.object.visible = constrain.enable);
         constrain.control && (constrain.control.enabled = constrain.enable);
       }
 
       if(constrain.type === ConstrainType.Position){
-        ImGui.SliderFloat3(`pos constrain[${i}]`, constrain.pos || [0,0,0], -2, 2)
-        ImGui.SliderFloat3(`effector_pos[${i}]`, pos, -100, 100);
+        ImGui.SliderFloat3(`constrain pos##${i}`, constrain.pos || [0,0,0], -2, 2)
+        ImGui.SliderFloat3(`current##${i}`, pos, -100, 100);
         if(constrain.object){
           constrain.object.position.set(...constrain.pos || [0,0,0]);
         }
       }
       else if(constrain.type === ConstrainType.Orientation){
         const rot = getJointOrientation(joints, joint);
-        SliderAngleFloat3(`rot constrain[${i}]`, constrain.rot || [0,0,0], -180, 180)
-        SliderAngleFloat3(`effector_rot[${i}]`, rot, -180, 180);
+        SliderAngleFloat3(`constrain rot##${i}`, constrain.rot || [0,0,0], -180, 180)
+        SliderAngleFloat3(`current##${i}`, rot, -180, 180);
         if(constrain.object){
           constrain.object.rotation.set(...constrain.rot || [0,0,0]);  
           constrain.object.position.set(...pos);
         }
       }
       else if(constrain.type === ConstrainType.OrientationBound){
-        const parentBone = bones[constrain.bone].parentIndex;
-        const parent = parentBone != -1 ? getJointWorldMatrix(joints, convertBoneToJointIndex(joints,parentBone)) : math.identity(4);
-        const rot = getJointOrientation(joints, joint);
-        SliderAngleFloat3(`rot bound constrain[${i}]`, constrain.base_rot || [0,0,0], -180, 180)
-        SliderAngleFloat3(`effector_rot[${i}]`, rot, -180, 180);
-        if(constrain.object){
-          constrain.object.rotation.set(...getRotationXYZ(mul(parent, rotXYZ(...constrain.base_rot || [0,0,0]))));  
-          constrain.object.position.set(...pos);
+        if(bones[constrain.bone]){
+          const parentBone = bones[constrain.bone].parentIndex;
+          const parent = parentBone != -1 ? getJointWorldMatrix(joints, convertBoneToJointIndex(joints,parentBone)) : math.identity(4);
+          const rot = getJointOrientation(joints, joint);
+          SliderAngleFloat3(`constrain rot bound##${i}`, constrain.base_rot || [0,0,0], -180, 180)
+          SliderAngleFloat3(`current##${i}`, rot, -180, 180);
+          if(constrain.object){
+            constrain.object.rotation.set(...getRotationXYZ(mul(parent, rotXYZ(...constrain.base_rot || [0,0,0]))));  
+            constrain.object.position.set(...pos);
+          }          
         }
       }
       ImGui.Separator();
-    })
+    });
+
+    ImGui.TreePop();
   }
 
   ImGui.End(); 
@@ -567,7 +596,7 @@ function animate(time: number) {
      camera !== undefined){
       renderer.render(scene, camera);
       renderer.state.reset();
- }
+  }
 
   endImGui();
   requestAnimationFrame(animate);  

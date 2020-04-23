@@ -57,7 +57,14 @@ export const ConstrainDim = [
   3,
   3,
   1
-]
+];
+
+export const ConstrainName = [
+  "Position",
+  "Orientation",
+  "OrientationBound",
+  "RefPose"
+];
 
 export enum JointType {
   Revolution,
