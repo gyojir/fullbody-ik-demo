@@ -455,7 +455,7 @@ function updateIk(delta: number): void {
  * ImGuiによるデバッグ表示
  * @param time 時間
  */
-function draw_imgui(time: number): void {
+function drawImgui(time: number): void {
   ImGui.Begin("Debug Window");
   ImGui.Dummy(new ImGui.ImVec2(400,0));
   
@@ -592,7 +592,7 @@ function onWindowResize() {
  * 更新
  * @param time 
  */
-function animate(time: number) {
+function loop(time: number) {
   const delta = clock?.getDelta() || 0;
   beginImGui(time);
 
@@ -600,7 +600,7 @@ function animate(time: number) {
   updateIk(delta);
 
   // デバッグ描画
-  draw_imgui(time);
+  drawImgui(time);
 
   // シーン描画
   if(scene !== undefined &&
@@ -611,7 +611,7 @@ function animate(time: number) {
   }
 
   endImGui();
-  requestAnimationFrame(animate);  
+  requestAnimationFrame(loop);  
 }
 
 // 実行
@@ -619,5 +619,5 @@ window.onload = async ()=>{
   await initImGui(canvas);
 
   initScene();
-  animate(0);
+  loop(0);
 }
