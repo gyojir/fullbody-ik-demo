@@ -447,7 +447,7 @@ export function solveJacobianIk(joints: Joint[], constrains: Constrain[], max_it
     
     // 目標位置と現在ジョイント位置の差分の計算
     const enables: boolean[] = [];
-    let diffs: Diff[] = constrains.map((e,i) => {
+    const diffs: Diff[] = constrains.map((e,i) => {
       enables[i] = true;
 
       if(!e.enable) {
@@ -496,19 +496,20 @@ export function solveJacobianIk(joints: Joint[], constrains: Constrain[], max_it
     }
 
     // 差分が(step / 2)より小さければ計算終了
+    // 参照姿勢はテキトーに小さくなったら
     if (dist_mean < step / 2 &&
         ref_mean < 0.001) {
       break;
     }
 
     // 目標ジョイント変位 = (差分ベクトル / 差分ベクトル長) * step
-    diffs = diffs.map(e => mul(normalize(e), step));
+    const step_diffs = diffs.map(e => mul<Diff>(normalize(e), step));
+    const step_diff_diff = current_diff_diff.map(e=> e * step);
 
     // 目標ジョイント変位にしたがって関節角度ベクトルを更新
-    // Δθ = Δp * J^+
+    // Δθ = J# * Δp
     // θ <- θ + Δθ
-    values = calcJacobianTask(joints, values, diffs.filter((e,i)=>enables[i]), constrains.filter((e,i)=>enables[i]), current_diff_diff.map(e=> e * step));
-    // values = add(values, current_diff_diff.map(e=> e * step));
+    values = calcJacobianTask(joints, values, step_diffs.filter((e,i)=>enables[i]), constrains.filter((e,i)=>enables[i]), step_diff_diff);
 
     setJointValues(joints, values);
   }
